@@ -1,0 +1,136 @@
+# CLAUDE.md — Dashboard SaaS LinkedIn (Kaizen)
+
+Ce repo est le dashboard client du SaaS LinkedIn Kaizen. Les clients y gèrent leurs agents IA de prospection, voient leurs conversations et configurent leur compte.
+
+Documents de pilotage :
+- `ROADMAP.md` : état d'avancement par phases (source de vérité du "où on en est")
+- `LOGBOOK.md` : journal chronologique des sessions
+- `docs/architecture-cible.md` : architecture cible en 4 couches (policy engine, socle, config client, boucle d'apprentissage) issue du challenge de Geoffrey, à lire avant toute décision structurante
+
+## Stack
+
+- Next.js (App Router) déployé sur Vercel
+- Supabase (Auth + Postgres) pour l'authentification et les données
+- Tailwind CSS pour le style
+- TypeScript
+- n8n (hors repo) : workflows Icebreaker et Conversation qui écrivent dans les tables lk_*
+
+## Connexion Supabase
+
+- URL projet : `https://omwmbqpbwprpaqaphphg.supabase.co` (projet migré sur le compte Supabase de Geoffrey en juin 2026, URL et clés inchangées)
+- Clé à utiliser dans le front : **anon key UNIQUEMENT**, jamais la service_role
+- Stocker URL et anon key dans `.env.local` (variables `NEXT_PUBLIC_SUPABASE_URL` et `NEXT_PUBLIC_SUPABASE_ANON_KEY`), jamais en dur dans le code
+- Utiliser `@supabase/ssr` pour gérer la session côté serveur et client
+
+## Règle de sécurité absolue
+
+La service_role key ne doit JAMAIS apparaître dans ce repo. Tout passe par l'anon key + la session utilisateur. La base est protégée par RLS : un client connecté ne voit QUE ses propres données, c'est géré côté base, pas besoin de filtrer manuellement par client dans les requêtes. Le seul endroit légitime pour la service_role key est n8n (workflows serveur).
+
+## Modèle de données (tables Supabase, préfixe lk_)
+
+La table `crm_contacts` (CRM migré depuis Airtable) vit sur le même projet Supabase mais est hors périmètre de ce dashboard.
+
+### lk_clients_config — la fiche du client
+
+| Colonne        | Type      | Rôle                                                |
+| -------------- | --------- | --------------------------------------------------- |
+| account_id     | text      | Identifiant Unipile du compte LinkedIn du client    |
+| user_id        | uuid      | Lien vers le compte Supabase Auth (= auth.uid())    |
+| email          | text      | Email du client                                     |
+| full_name      | text      | Nom                                                 |
+| is_active      | boolean   | Compte client actif (PAS le statut LinkedIn)        |
+| ai_enabled     | boolean   | Kill switch global IA du client (toggle sidebar)    |
+| knowledge_base | jsonb     | Infos produit/ton/calendrier                        |
+
+**Règle critique** : à l'inscription, il faut créer (ou lier) une ligne `lk_clients_config` avec `user_id = auth.uid()` du nouvel utilisateur ET son `account_id` Unipile. Sans ce lien, le RLS bloque tout et le client ne voit rien. Aujourd'hui le signup ne crée PAS cette ligne (le lien est fait à la main), c'est le chantier onboarding de la Phase 3.
+
+**Angle mort connu** : le badge "LinkedIn connecté" du dashboard repose sur `is_active`, qui veut dire "compte client actif" et pas "LinkedIn réellement connecté". À remplacer par une colonne `linkedin_status` + `last_connected_at` alimentée par le webhook Unipile (voir ROADMAP).
+
+### lk_agents — la bibliothèque de prompts (coeur du produit)
+
+Chaque ligne = un agent IA créé par le client.
+
+| Colonne        | Type    | Rôle                                                                    |
+| -------------- | ------- | ----------------------------------------------------------------------- |
+| id             | uuid    | Identifiant agent                                                       |
+| account_id     | text    | À quel client appartient l'agent                                        |
+| name           | text    | Nom de l'agent donné par le client                                      |
+| objectif       | text    | Objectif business (texte libre : prise de call, closing, qualification) |
+| prompt_content | text    | Le prompt complet de l'agent                                            |
+| knowledge_base | jsonb   | Base de connaissance spécifique                                         |
+| is_active      | boolean | Agent actif ou archivé                                                  |
+
+Le client a un accès CRUD complet sur ses propres agents. Le wizard de création (`src/app/dashboard/agents/AgentWizard.tsx` + `promptTemplate.ts`) compile des choix structurés (tutoiement, style, critères de qualification, exemples de voix) en un prompt final : c'est l'embryon du "compilateur de config" de l'architecture cible, à renforcer plutôt qu'à remplacer.
+
+### lk_agent_assignments — le sélecteur de rôle
+
+Dit quel agent de la bibliothèque joue quel rôle technique à un instant donné.
+
+| Colonne    | Type | Rôle                                    |
+| ---------- | ---- | --------------------------------------- |
+| account_id | text | Le client                               |
+| role       | text | `icebreaker`, `conversation` ou `intent` |
+| agent_id   | uuid | L'agent assigné à ce rôle              |
+
+Clé primaire `(account_id, role)` : un seul agent par rôle et par client à la fois. Le client peut réassigner librement sans supprimer ses agents. Le rôle `intent` (analyse sentiment/score/opt-out) est défini mais son exécution n8n est reportée.
+
+### lk_prospects — les prospects
+
+| Colonne       | Type    | Rôle                                                                       |
+| ------------- | ------- | -------------------------------------------------------------------------- |
+| account_id    | text    | Le client                                                                  |
+| linkedin_id   | text    | Identifiant LinkedIn du prospect                                           |
+| full_name     | text    | Nom du prospect                                                            |
+| status        | text    | `invited` / `connected` / `in_conversation` / `interested` / `not_interested` |
+| message_count | integer | Nb de messages échangés                                                    |
+| ai_enabled    | boolean | Off-switch IA par prospect (toggle dans /dashboard/conversations)          |
+| processing_status | text | Verrou anti-doublon n8n (`idle` / `processing`)                          |
+
+Plus des colonnes d'enrichissement alimentées par n8n : profile_summary, occupation, job_title, company_name, scoring, scoring_justification, intent_state, reply_sentiment, nb_relance, last_message_sent_at, last_reply_at, chat_id, etc.
+
+C'est n8n qui écrit ici. Le dashboard lit, et peut UNIQUEMENT mettre à jour `ai_enabled` (policy RLS dédiée). Le garde-fou du workflow n8n Conversation lit aussi `ai_enabled` (unifié le 12/06/2026, l'ancienne colonne jumelle `ia_active` a été supprimée).
+
+### lk_messages — les messages (lecture seule côté dashboard)
+
+| Colonne     | Type        | Rôle             |
+| ----------- | ----------- | ---------------- |
+| prospect_id | uuid        | À quel prospect  |
+| account_id  | text        | Le client        |
+| direction   | text        | `inbound` / `outbound` |
+| content     | text        | Le message       |
+| sent_at     | timestamptz | Date d'envoi     |
+
+C'est n8n qui écrit ici. Le dashboard lit seulement.
+
+## Pipeline n8n (hors repo, mais le dashboard en dépend)
+
+- Workflow Icebreaker (id `0yQOYs1Ffiqtj4IX`) : webhook Unipile `new_relation`, envoie le 1er message
+- Workflow Conversation (id `fsSw8bIknV1cAgKx`) : webhook Unipile `message_received`, génère la réponse via l'agent assigné au rôle `conversation`
+- Garde-fous du workflow Conversation : event=message_received, is_sender=false, message non vide, rejet WhatsApp, IA active, processing_status=idle
+- La stratégie de conversation vit ENTIÈREMENT dans `prompt_content` (lk_agents), pas dans des règles n8n. Le dashboard est l'éditeur de cette stratégie.
+
+## Plan de build par phases
+
+Le détail et les cases cochées vivent dans `ROADMAP.md`. Résumé :
+
+- **Phase 1 (terminée)** : squelette + preuve que la sécurité RLS marche
+- **Phase 2 (terminée)** : CRUD lk_agents + wizard de création + assignation des rôles
+- **Phase 3 (en cours)** : onboarding (signup doit créer/lier lk_clients_config), retour Unipile notify_url, statut LinkedIn fiable. Les pages conversations et stats existent déjà.
+- **Phase 4 (en cours côté n8n)** : pipeline agents conversationnels, test de bout en bout à faire
+- **Phase 5 (cible, voir docs/architecture-cible.md)** : policy engine, compilateur de config, versionnage, harness d'évaluation, boucle d'apprentissage
+
+## Intégration Unipile
+
+Unipile gère la connexion aux comptes LinkedIn des clients. L'`account_id` Unipile est la clé centrale de toutes les tables `lk_*`.
+
+- Auth : header `X-API-KEY`, côté serveur uniquement (n8n ou server actions). Env vars : `UNIPILE_BASE_URL` + `UNIPILE_API_KEY`.
+- Un account_id Unipile change si le client reconnecte son LinkedIn : toujours lire l'account_id courant dans `lk_clients_config`, jamais en dur.
+- Doc de référence : `docs/unipile/` -- lire `docs/unipile/README.md` pour savoir quel fichier consulter avant d'implémenter quoi que ce soit lié à Unipile.
+
+## Conventions
+
+- Pas de double tiret ni de tiret long dans le code, les commentaires ou l'UI
+- Code simple et lisible, pas de sur-ingénierie
+- Toujours utiliser TypeScript strict
+- Composants serveur Next.js par défaut, client (`"use client"`) seulement si nécessaire
+- Tenir `LOGBOOK.md` à jour à chaque session de travail, et cocher `ROADMAP.md` quand un chantier avance

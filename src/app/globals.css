@@ -1,0 +1,55 @@
+@import "tailwindcss";
+
+:root {
+  --background: #0a0d12;
+  --foreground: #e4e9f1;
+
+  --panel: #11151d;
+  --panel-raised: #161b25;
+  --border: #232b39;
+  --border-strong: #303a4b;
+
+  --accent: #22d3ee;
+  --accent-soft: #0e7490;
+  --positive: #34d399;
+  --warning: #f59e0b;
+  --danger: #f87171;
+
+  --text-muted: #7d8aa3;
+  --text-dim: #4d5870;
+
+  --font-display: var(--font-jetbrains-mono), ui-monospace, monospace;
+  --font-sans: var(--font-sora), ui-sans-serif, system-ui, sans-serif;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-panel: var(--panel);
+  --color-panel-raised: var(--panel-raised);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-positive: var(--positive);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  --color-text-muted: var(--text-muted);
+  --color-text-dim: var(--text-dim);
+  --font-display: var(--font-display);
+  --font-sans: var(--font-sans);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+}
+
+/* Grille de fond technique, subtile */
+.control-grid {
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
