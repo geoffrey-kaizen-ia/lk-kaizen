@@ -1,6 +1,6 @@
-# Skill : logsync
+# Skill : log
 
-Triggered when the user says "logsync" (alone or "fais un logsync", "logsync stp").
+Triggered when the user says "log" (alone or "fais un log", "log stp").
 
 ## What to do
 

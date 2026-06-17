@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
 type Prospect = {
@@ -87,9 +88,10 @@ export default function ConversationsClient({
 }: {
   prospects: Prospect[];
 }) {
+  const searchParams = useSearchParams();
   const [prospects, setProspects] = useState(initialProspects);
   const [selectedId, setSelectedId] = useState<string | null>(
-    initialProspects[0]?.id ?? null
+    searchParams.get("prospect") ?? initialProspects[0]?.id ?? null
   );
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);

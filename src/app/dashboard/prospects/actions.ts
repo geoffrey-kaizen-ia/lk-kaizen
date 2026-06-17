@@ -64,6 +64,11 @@ export async function launchSearch(formData: FormData) {
     });
 
     if (!res.ok) return { error: "Le lancement de la recherche a echoue." };
+
+    const data = await res.json().catch(() => null);
+    if (data?.exhausted) {
+      return { error: "Plus de profils disponibles pour cette recherche. Modifie tes criteres pour relancer." };
+    }
   } catch {
     return { error: "Impossible de contacter le service de recherche." };
   }

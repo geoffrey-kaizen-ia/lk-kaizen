@@ -4,7 +4,7 @@
 
 - `open` → invoquer le skill `.claude/skills/open.md` : briefing du matin — où on en est, ce qui reste à faire, points d'attention
 - `close` → invoquer le skill `.claude/skills/close.md` : résumé de fin de session — ce qui a été fait, points ouverts, prochaine étape
-- `logsync` → invoquer le skill `.claude/skills/logsync.md` : analyse la conversation et met à jour LOGBOOK.md + ROADMAP.md
+- `log` → invoquer le skill `.claude/skills/log.md` : analyse la conversation et met à jour LOGBOOK.md + ROADMAP.md
 
 Ces mots-clés sont réservés à ce projet et ne doivent pas être confondus avec les triggers OMC globaux.
 

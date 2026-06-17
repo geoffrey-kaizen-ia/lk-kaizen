@@ -5,6 +5,45 @@ Pour la vue d'ensemble par phases, voir [ROADMAP.md](./ROADMAP.md).
 
 ---
 
+## 2026-06-17 (suite 4 — CRM drawer + tri colonnes + agent intent)
+
+### CRM /dashboard/pipeline — enrichissements
+
+- Ajout bouton bulle "Voir la conversation" sur chaque ligne du CRM : lien vers `/dashboard/conversations?prospect={id}`. ConversationsClient modifie pour lire le param URL et selectionner directement le bon prospect.
+- Tri au clic sur les en-tetes de colonnes : Prospect, Statut, Msgs, IA, Derniere activite. Fleche indicatrice (asc/desc), deuxieme clic inverse, colonne inactive affiche ↕.
+- Drawer prospect : clic sur une ligne ouvre un panneau lateral droit avec avatar, nom, lien LinkedIn, poste, entreprise, badge statut, indicateur IA, stats (messages/relances/derniere reponse/dernier envoi), intent_state si dispo, bouton "Voir la conversation" en footer.
+
+### Priorisation et conception — agent intent / scoring
+
+- Statut actuel clarifie : `interested` et `not_interested` ne sont jamais ecrits automatiquement aujourd'hui. Seuls `invited`, `connected`, `in_conversation` sont poses par n8n.
+- Decision : agent intent = V1 prioritaire, prompt fixe Kaizen (non editable client), node Claude insere dans WF Conversation apres "Supabase - Message entrant" et avant "Code - Calcul timing".
+- Prompt complet redige et note en session (scoring 1-10, scoring_justification, intent_state, reply_sentiment, conversation_summary). Code node Parse JSON inclus. Prêt a coller dans n8n.
+- Migration a faire : ajouter colonne `conversation_summary text` sur `lk_prospects`.
+- Nouvelles priorites notees en ROADMAP : blocage conversation longue (message_count >= seuil -> ai_enabled=false + alerte), garde-fou emoji/reaction LinkedIn (ne pas repondre a un pouce ou reaction seule).
+
+### ROADMAP mise a jour
+
+- Feature 2 CRM et Feature 3 Agent intent ajoutees. Priorites reordonnees au 17/06.
+- Score cache du CRM note pour V2 (dependance agent intent).
+
+## 2026-06-17 (suite 3 — memoire curseur pagination + push git)
+
+### Connexion GitHub / Vercel verifiee + push
+
+- Commit de tout le travail 16-17/06 non versionne (22 fichiers : droits par client, icebreaker template, settings cadence, page admin, RangeSlider, delayPresets) puis `git push origin main`.
+- CONFIRME : le repo GitHub EST connecte au projet Vercel. Le push a declenche un build automatique en production (statut Building observe). L'angle mort note dans CLAUDE.md (push ne deploie pas) est leve.
+- File d'attente messages : WF Conversation (noeud Calcul timing) ET WF Cron confirmes termines par Nicolas. ANTHROPIC_API_KEY changee/OK.
+
+### Memoire de curseur de pagination (lk_searches) — IMPLEMENTEE
+
+- Le workflow n8n "Scrapping" lit/ecrit desormais `lk_searches` pour reprendre la pagination Unipile au bon endroit a chaque relance d'une meme recherche.
+- DECOUVERTE : le `cursor` Unipile est un simple base64 encodant `{ start, params }` (pas de session token, PAS d'expiration). Reprise fiable dans le temps.
+- Nouveaux noeuds : `Code - Compute hash` (hash djb2 pur JS, module `crypto` interdit en sandbox n8n ; normalise keywords+location+network+industry), `HTTP - Lire curseur` (GET PostgREST, service_role, `alwaysOutputData`), `HTTP - Upsert lk_searches` (PATCH avec filtres account_id+query_hash), `Recherche epuisee` (IF sur `exhausted`) + `Reponse - Recherche epuisee` (Respond webhook).
+- `Resolve location & build payload1` modifie : lit cfg depuis Compute hash + extrait last_cursor de la reponse Lire curseur. `Search profiles` : curseur passe en query param. `Supabase - Inserer resultats` passe en `continueErrorOutput` (doublons UNIQUE ignores ligne par ligne, comportement anti-doublon voulu).
+- Dashboard : `launchSearch` lit la reponse n8n et affiche "Plus de profils disponibles..." si `exhausted`. Webhook passe en `responseMode: responseNode`.
+- Pieges resolus : `crypto` interdit (djb2), anon key bloquait lecture+ecriture (RLS, passe service_role), filtre PostgREST sans prefixe `eq.`, `Lire curseur` sans filtre query_hash renvoyait toujours la 1re ligne (toutes les recherches paraissaient epuisees).
+- Point ouvert : REVIEW du WF complet a releve 3 bugs bloquants PAS encore corriges -> (1) `Supabase - Marquer invite` branche auto-invite n'a AUCUN filtre = passe TOUTE la table en "invited", (2) connexion `HTTP - Upsert lk_searches -> Flatten` fait tourner Flatten/insert 2x, (3) webhook en responseNode mais branches recherche-normale et send_invitations sans noeud Respond = 500 cote dashboard. Mineurs : curseur envoye en double (body + query param), `exhausted` detecte avec 1 run de retard.
+
 ## 2026-06-17 (suite 2 — icebreaker UX refonte)
 
 ### Refonte UX card Icebreaker

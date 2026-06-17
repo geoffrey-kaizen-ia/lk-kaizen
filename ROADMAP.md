@@ -53,7 +53,8 @@ Reste a faire :
   - Migration `add_industry_company_to_lk_search_results` (colonnes `industry`, `current_company` sur `lk_search_results`) toujours utile pour `current_company`. Formulaire `/dashboard/prospects` : champs "Dans quel secteur ?", "Postes a eviter" + validation nb profils (1-50, vide = 50) + bouton "Ignorer la selection" en masse. `launchSearch` envoie `industry` et `exclude_titles` (plus de `exclude_industry`).
   - Nodes n8n "Resolve location & build payload1" et "Flatten + metadata1" corriges et confirmes fonctionnels par Nicolas.
 - [x] ANTI-DOUBLON recherches repetees (15/06 suite 5) : contrainte `UNIQUE (account_id, provider_id)` ajoutee sur `lk_search_results` (migration `dedup_lk_search_results_unique_provider`, doublons existants nettoyes). Active immediatement, evite les doublons d'insertion meme sans le reste de la strategie.
-- [ ] EN PAUSE (15/06 suite 5, "trop complexe, faut que je reflechisse") : memoire de curseur de pagination pour eviter de re-scanner les memes profils a chaque recherche. Table `lk_searches` deja creee (migration `create_lk_searches_cursor_memory`, RLS posee) mais INERTE. Plan complet (8 nodes : query_hash, "Lire curseur", reprise de pagination dans "Resolve location & build payload1", "Lire IDs existants" + anti-join dans "Flatten + metadata1", "Supabase insert" Continue On Fail, "Calc curseur" + "Sauver curseur") concu mais non implemente. A reprendre a la demande de Nicolas.
+- [x] MEMOIRE DE CURSEUR DE PAGINATION (17/06) : implementee dans le WF "Scrapping". Table `lk_searches` desormais active. Noeuds ajoutes : `Code - Compute hash` (djb2 pur JS, normalise keywords+location+network+industry), `HTTP - Lire curseur` (GET PostgREST service_role, alwaysOutputData), `HTTP - Upsert lk_searches` (PATCH filtre account_id+query_hash), `Recherche epuisee` (IF exhausted) + `Reponse - Recherche epuisee`. `Resolve location` lit le cursor, `Search profiles` le passe en query param. `Supabase - Inserer resultats` en continueErrorOutput (anti-doublon UNIQUE ligne par ligne). Dashboard `launchSearch` affiche "Plus de profils disponibles" si exhausted. Le cursor Unipile est un base64 `{start,params}` sans expiration.
+- [ ] BUGS WF Scrapping releves a la review du 17/06, A CORRIGER : (1) `Supabase - Marquer invite` (branche auto-invite) sans filtre = passe TOUTE la table en "invited" ; (2) connexion `HTTP - Upsert lk_searches -> Flatten` fait tourner Flatten/insert 2x ; (3) webhook en responseNode mais branches recherche-normale et send_invitations sans noeud Respond = 500 cote dashboard. Mineurs : cursor envoye en double (body + query param), `exhausted` detecte avec 1 run de retard.
 - [x] Webhooks doublons sur le compte de Geoffrey (Geoffrey - New Relation LinkedIn + Geoffrey_LinkedIn_message_entrant) nettoyes le 15/06 (LOT 0).
 - [ ] Verifier les endpoints Unipile profil/posts
 - [ ] Brancher les credentials HTTP (X-API-KEY) sur tous les nodes HTTP
@@ -109,11 +110,32 @@ Detail complet dans [docs/architecture-cible.md](./docs/architecture-cible.md). 
 - [x] Feature 2 (mode test agent type Thissmart) : bouton "Tester" sur chaque agent de /dashboard/agents, ouvre une modal de chat qui appelle directement l'API Anthropic (claude-sonnet-4-6) avec le meme gabarit de prompt que le node "Claude - Reponse" du workflow n8n Conversation (system=prompt_content, historique/dernier message/infos prospect/nb echanges). Profil du prospect simule editable (entreprise/poste/resume). Rien n'est ecrit en base. RESTE A FAIRE : Nicolas doit renseigner ANTHROPIC_API_KEY dans .env.local.
 - [x] Clarification des 3 types d'agents sur /dashboard/agents (15/06) : bandeau explicatif des roles, choix du type d'agent (conversation / icebreaker / invitation recue) dans le wizard avec formulaire et gabarit de prompt dedies pour les types "premier message", badge "Premier message" sur les agents concernes, et mode test par persona simule (TestFirstMessageModal) calque sur le node "Claude - Icebreaker" du workflow n8n Icebreaker. Le role "intent" (lk_agent_assignments) est desormais utilise pour "Invitation recue".
 
-## Priorites court terme (au 16/06/2026)
+## Feature 2 — CRM prospects (EN COURS)
 
-1. Finir le WF Conversation : ecrire le noeud "Code - Calcul timing" (tirage aleatoire + recalage creneau) + modifier SB Update prospect + supprimer Unipile Envoyer et SB Message sortant
-2. Finir le WF Cron : cabler les 3 noeuds apres le IF (Unipile Envoyer + SB Message sortant + SB Update prospect qui remet a null)
-3. Test de bout en bout du workflow Conversation avec la file d'attente
-4. Trancher les 2 decisions strategiques avec Geoffrey, puis sequencer la Phase 5
-5. Cabler le retour Unipile notify_url (Phase 3)
-6. EN ATTENTE NICOLAS : reprendre la memoire de curseur de pagination (lk_searches) quand il aura reflechi a la strategie anti-doublons
+- [x] Page /dashboard/pipeline : tableau CRM complet avec filtres (statut, score, IA, recherche texte) + pagination 10/25/50 (17/06). Sidebar renommee : "CRM" + "Recherche prospects".
+- [ ] V2 — Colonne Score (scoring/icp_score) : cachee pour l'instant car jamais alimentee. A reintroduire quand l'agent intent (rôle "Invitation recue") sera cable et produira un score reel par prospect.
+- [ ] V2 — Workflow "Invitation recue" (intent) : quelqu'un envoie une invitation -> accepte auto -> 1er message IA. Webhook Unipile a identifier, workflow n8n a construire.
+- [ ] Relance Icebreaker : si prospect status=invited depuis X jours sans reponse et nb_relance=0 -> envoyer un 2e message. Colonnes nb_relance + last_message_sent_at deja presentes dans lk_prospects. Nouveau WF n8n cron a construire.
+
+## Feature 3 — Agent intent / scoring (V1, PRIORITE)
+
+- [ ] Migration : ajouter colonne `conversation_summary text` sur `lk_prospects`
+- [ ] n8n WF Conversation : inserer 4 noeuds apres "Supabase - Message entrant" et AVANT "Code - Calcul timing" : (1) Claude - Analyse intent (system prompt fixe Kaizen + historique Unipile en user message), (2) Code - Parse JSON intent, (3) Supabase - Update scoring prospect (scoring, scoring_justification, intent_state, reply_sentiment, conversation_summary), (4) IF - Opt-out ? -> OUI : Supabase desactive IA + STOP / NON : continue vers Calcul timing. Prompt pret, voir session 17/06.
+- [ ] Si `opt_out` detecte : ecrire `ai_enabled=false` + `status=not_interested` automatiquement.
+- [ ] Dashboard CRM enrichi :
+  - Colonne Score (scoring/10) + colonne Intent (interested/neutral/not_interested/opt_out) avec badge couleur
+  - Tooltip sur scoring_justification (pourquoi ce score)
+  - conversation_summary visible en sous-ligne ou tooltip (resume de l'echange)
+  - Dernier message IA envoye : afficher le contenu du dernier message outbound dans la ligne CRM (lecture depuis lk_messages direction=outbound)
+  - Badge warning rouge "IA arretee" quand ai_enabled=false sur un prospect, avec la raison (opt_out, score trop bas, message_count depasse seuil, desactive manuellement)
+  - Bouton "Reprendre la main" sur les prospects avec IA arretee : ouvre directement la conversation + invite le client a repondre manuellement
+  - Reflexion a mener avec Geoffrey : seuil de score en dessous duquel le client est notifie pour intervenir manuellement (ex score <= 3 apres 3 echanges -> alerte + suggestion de message humain)
+
+## Priorites court terme (au 17/06/2026)
+
+1. Agent intent / scoring (Feature 3) : migration conversation_summary + node Claude dans WF Conversation + affichage CRM
+2. Corriger les 3 bugs bloquants du WF Scrapping (Marquer invite sans filtre, double Flatten, branches sans Respond) avant d'utiliser l'auto-invite
+3. Blocage conversation longue : si message_count >= seuil (ex 10), couper l'IA automatiquement (ai_enabled=false sur le prospect) + notifier le client dans le dashboard (badge ou alerte). Evite les boucles IA-IA infinies. Seuil configurable dans lk_clients_config ou fixe en dur dans n8n.
+4. Garde-fou emoji/reaction : dans le WF Conversation, avant l'appel Claude, detecter si le message recu est une reaction emoji seule (pouce, coeur, etc.) ou un message tres court sans texte reel -> ne pas repondre, laisser processing_status=idle. Unipile renvoie parfois des reactions LinkedIn comme messages entrants.
+5. Workflow "Invitation recue" (role intent) : accepte auto + 1er message IA quand quelqu'un envoie une invitation
+6. Relance Icebreaker : 2e message si pas de reponse apres X jours (nb_relance=0, last_message_sent_at < now-Xj)
