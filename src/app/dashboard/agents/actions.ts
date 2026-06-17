@@ -8,9 +8,15 @@ const TEST_MODEL = "claude-sonnet-4-6";
 
 async function getAccountId() {
   const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  // Filtre user_id : la policy admin (geoffrey) lit toutes les fiches, sans ce
+  // filtre maybeSingle renverrait null et bloquerait l'admin.
   const { data } = await supabase
     .from("lk_clients_config")
     .select("account_id")
+    .eq("user_id", user?.id ?? "")
     .maybeSingle();
   return data?.account_id ?? null;
 }
@@ -215,6 +221,66 @@ export async function removeAssignment(role: string) {
     .delete()
     .eq("account_id", accountId)
     .eq("role", role);
+
+  if (error) return { error: error.message };
+  revalidatePath("/dashboard/agents");
+  return { error: null };
+}
+
+export async function toggleRoleEnabled(role: string, enabled: boolean) {
+  const supabase = await createClient();
+  const accountId = await getAccountId();
+  if (!accountId) return { error: "Compte non configure" };
+
+  const { error } = await supabase
+    .from("lk_agent_assignments")
+    .update({ is_enabled: enabled })
+    .eq("account_id", accountId)
+    .eq("role", role);
+
+  if (error) return { error: error.message };
+  revalidatePath("/dashboard/agents");
+  return { error: null };
+}
+
+export async function updateIcebreakerConfig(
+  mode: "ai" | "template",
+  template: string | null
+) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Session expiree, recharge la page." };
+
+  if (mode === "template" && !template?.trim()) {
+    return { error: "Le message template ne peut pas etre vide." };
+  }
+
+  const { error } = await supabase
+    .from("lk_clients_config")
+    .update({
+      icebreaker_mode: mode,
+      icebreaker_template: mode === "template" ? template?.trim() ?? null : null,
+    })
+    .eq("user_id", user.id);
+
+  if (error) return { error: error.message };
+  revalidatePath("/dashboard/agents");
+  return { error: null };
+}
+
+export async function toggleIcebreakerEnabled(enabled: boolean) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Session expiree, recharge la page." };
+
+  const { error } = await supabase
+    .from("lk_clients_config")
+    .update({ icebreaker_enabled: enabled })
+    .eq("user_id", user.id);
 
   if (error) return { error: error.message };
   revalidatePath("/dashboard/agents");

@@ -5,9 +5,15 @@ import { createClient } from "@/lib/supabase/server";
 
 async function getAccountId() {
   const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  // Filtre user_id : la policy admin (geoffrey) lit toutes les fiches, sans ce
+  // filtre maybeSingle renverrait null et bloquerait l'admin.
   const { data } = await supabase
     .from("lk_clients_config")
     .select("account_id")
+    .eq("user_id", user?.id ?? "")
     .maybeSingle();
   return data?.account_id ?? null;
 }

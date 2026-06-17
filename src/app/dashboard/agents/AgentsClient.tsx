@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useRef } from "react";
 import {
   createAgent,
   updateAgent,
@@ -8,7 +8,15 @@ import {
   deleteAgent,
   upsertAssignment,
   removeAssignment,
+  toggleRoleEnabled,
+  updateIcebreakerConfig,
+  toggleIcebreakerEnabled,
 } from "./actions";
+
+const IB_VARIABLES = [
+  { label: "{{first_name}}", desc: "Prenom" },
+  { label: "{{last_name}}", desc: "Nom" },
+];
 import AgentWizard from "./AgentWizard";
 import TestAgentModal from "./TestAgentModal";
 import TestFirstMessageModal from "./TestFirstMessageModal";
@@ -25,6 +33,7 @@ type Agent = {
 type Assignment = {
   role: string;
   agent_id: string;
+  is_enabled: boolean;
 };
 
 const ROLES = [
@@ -144,9 +153,19 @@ const AGENT_TYPE_OPTIONS: { value: string; label: string }[] = [
 export default function AgentsClient({
   agents,
   assignments,
+  allowedRoles,
+  canEditPrompt,
+  icebreakerMode,
+  icebreakerTemplate,
+  icebreakerEnabled,
 }: {
   agents: Agent[];
   assignments: Assignment[];
+  allowedRoles: string[];
+  canEditPrompt: boolean;
+  icebreakerMode: "ai" | "template";
+  icebreakerTemplate: string;
+  icebreakerEnabled: boolean;
 }) {
   const [modalOpen, setModalOpen] = useState(false);
   const [wizardOpen, setWizardOpen] = useState(false);
@@ -156,11 +175,76 @@ export default function AgentsClient({
   const [pendingAgentType, setPendingAgentType] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
+  // Icebreaker config state
+  const [ibMode, setIbMode] = useState<"ai" | "template">(icebreakerMode);
+  const [ibTemplate, setIbTemplate] = useState(icebreakerTemplate);
+  const [ibEnabled, setIbEnabled] = useState(icebreakerEnabled);
+  const [ibSaving, startIbTransition] = useTransition();
+  const [ibError, setIbError] = useState<string | null>(null);
+  const [ibSaved, setIbSaved] = useState(false);
+  const [ibTemplateDirty, setIbTemplateDirty] = useState(false);
+  const ibTextareaRef = useRef<HTMLTextAreaElement>(null);
+
+  function insertIbVariable(variable: string) {
+    const el = ibTextareaRef.current;
+    if (!el) return;
+    const start = el.selectionStart;
+    const end = el.selectionEnd;
+    const next = ibTemplate.slice(0, start) + variable + ibTemplate.slice(end);
+    setIbTemplate(next);
+    setIbTemplateDirty(true);
+    requestAnimationFrame(() => {
+      el.focus();
+      el.setSelectionRange(start + variable.length, start + variable.length);
+    });
+  }
+
+  // Active un bloc (ai ou template) — desactive l'autre automatiquement
+  function handleIbBlockActivate(block: "ai" | "template") {
+    setIbMode(block);
+    setIbEnabled(true);
+    setIbError(null);
+    setIbSaved(false);
+    startIbTransition(async () => {
+      const result = await updateIcebreakerConfig(block, block === "template" ? ibTemplate : null);
+      if (result.error) {
+        setIbError(result.error);
+        return;
+      }
+      await toggleIcebreakerEnabled(true);
+    });
+  }
+
+  // Desactive l'icebreaker (les deux blocs s'eteignent)
+  function handleIbDisable() {
+    setIbEnabled(false);
+    startIbTransition(async () => {
+      await toggleIcebreakerEnabled(false);
+    });
+  }
+
+  function handleIbSaveTemplate() {
+    setIbError(null);
+    setIbSaved(false);
+    startIbTransition(async () => {
+      const result = await updateIcebreakerConfig("template", ibTemplate);
+      if (result.error) {
+        setIbError(result.error);
+      } else {
+        setIbSaved(true);
+        setIbTemplateDirty(false);
+      }
+    });
+  }
+
   const activeAgents = agents.filter((a) => a.is_active !== false);
   const archivedAgents = agents.filter((a) => a.is_active === false);
 
   const assignmentMap: Record<string, string> = Object.fromEntries(
     assignments.map((a) => [a.role, a.agent_id])
+  );
+  const enabledMap: Record<string, boolean> = Object.fromEntries(
+    assignments.map((a) => [a.role, a.is_enabled])
   );
 
   function openCreate() {
@@ -269,6 +353,12 @@ export default function AgentsClient({
     });
   }
 
+  function handleToggleEnabled(role: RoleKey, enabled: boolean) {
+    startTransition(async () => {
+      await toggleRoleEnabled(role, enabled);
+    });
+  }
+
   return (
     <div>
       {/* Explication des 3 types d'agents */}
@@ -303,30 +393,223 @@ export default function AgentsClient({
           Choisit quel agent joue chaque role dans ta sequence de prospection.
         </p>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          {ROLES.map(({ key, label, iconColor, icon }) => (
-            <div
-              key={key}
-              className="rounded-lg border border-border bg-panel p-4"
-            >
-              <div className="mb-3 flex items-center gap-3">
-                <div className={`shrink-0 ${iconColor}`}>{icon}</div>
-                <p className="text-sm font-semibold text-foreground">{label}</p>
-              </div>
-              <select
-                className="w-full rounded-md border border-border-strong bg-panel-raised px-2.5 py-2 text-sm text-foreground focus:border-accent focus:outline-none disabled:opacity-50"
-                value={assignmentMap[key] ?? ""}
-                onChange={(e) => handleRoleChange(key, e.target.value)}
-                disabled={isPending}
+          {ROLES.map(({ key, label, iconColor, icon }) => {
+            const isAllowed = allowedRoles.includes(key);
+
+            // Icebreaker : radio list vertical dans la card, Message fixe s'ouvre en accordeon
+            if (key === "icebreaker") {
+              const aiActive = ibEnabled && ibMode === "ai";
+              const templateActive = ibEnabled && ibMode === "template";
+
+              return (
+                <div
+                  key={key}
+                  className={`rounded-lg border p-4 ${
+                    isAllowed ? "border-border bg-panel" : "border-border bg-panel opacity-50"
+                  }`}
+                >
+                  {/* Header identique aux autres cards */}
+                  <div className="mb-3 flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <div className={`shrink-0 ${isAllowed ? iconColor : "text-text-dim"}`}>{icon}</div>
+                      <p className={`text-sm font-semibold ${isAllowed ? "text-foreground" : "text-text-muted"}`}>
+                        {label}
+                      </p>
+                    </div>
+                    {!isAllowed && (
+                      <span className="rounded border border-border-strong px-1.5 py-0.5 font-display text-[9px] font-medium uppercase tracking-wider text-text-dim">
+                        Forfait
+                      </span>
+                    )}
+                  </div>
+
+                  {isAllowed ? (
+                    <div className="space-y-2">
+
+                      {/* Option Agent IA */}
+                      <div className={`rounded-md border p-3 transition-colors ${aiActive ? "border-accent/30 bg-accent/5" : "border-border"}`}>
+                        <button
+                          type="button"
+                          disabled={ibSaving}
+                          onClick={() => aiActive ? handleIbDisable() : handleIbBlockActivate("ai")}
+                          className="flex w-full items-center gap-2.5 text-left"
+                        >
+                          <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${aiActive ? "border-accent bg-accent" : "border-border-strong bg-panel-raised"}`}>
+                            {aiActive && <span className="h-1.5 w-1.5 rounded-full bg-white" />}
+                          </span>
+                          <span className={`text-sm font-medium ${aiActive ? "text-foreground" : "text-text-muted"}`}>Agent IA</span>
+                          {aiActive && (
+                            <span className="ml-auto rounded bg-accent/10 px-1.5 py-0.5 font-display text-[9px] font-semibold uppercase tracking-wider text-accent">Actif</span>
+                          )}
+                        </button>
+                        {aiActive && (
+                          <div className="mt-2.5 pl-6">
+                            <select
+                              className="w-full rounded-md border border-border-strong bg-panel-raised px-2.5 py-2 text-sm text-foreground focus:border-accent focus:outline-none disabled:opacity-50"
+                              value={assignmentMap["icebreaker"] ?? ""}
+                              onChange={(e) => handleRoleChange("icebreaker", e.target.value)}
+                              disabled={isPending}
+                            >
+                              <option value="">-- Choisir un agent --</option>
+                              {agentsCompatibleWithRole(activeAgents, "icebreaker").map((a) => (
+                                <option key={a.id} value={a.id}>{a.name ?? "Sans nom"}</option>
+                              ))}
+                            </select>
+                            {!assignmentMap["icebreaker"] && (
+                              <p className="mt-1.5 text-xs text-warning">Selectionne un agent pour que l&apos;Icebreaker fonctionne.</p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Option Message fixe — s'ouvre en accordeon */}
+                      <div className={`rounded-md border transition-colors ${templateActive ? "border-accent/30 bg-accent/5" : "border-border"}`}>
+                        <button
+                          type="button"
+                          disabled={ibSaving}
+                          onClick={() => templateActive ? handleIbDisable() : handleIbBlockActivate("template")}
+                          className="flex w-full items-center gap-2.5 p-3 text-left"
+                        >
+                          <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${templateActive ? "border-accent bg-accent" : "border-border-strong bg-panel-raised"}`}>
+                            {templateActive && <span className="h-1.5 w-1.5 rounded-full bg-white" />}
+                          </span>
+                          <span className={`text-sm font-medium ${templateActive ? "text-foreground" : "text-text-muted"}`}>Message fixe</span>
+                          {templateActive && (
+                            <span className="ml-auto rounded bg-accent/10 px-1.5 py-0.5 font-display text-[9px] font-semibold uppercase tracking-wider text-accent">Actif</span>
+                          )}
+                        </button>
+
+                        {/* Accordeon : uniquement si actif */}
+                        {templateActive && (
+                          <div className="border-t border-border/60 px-3 pb-3 pt-2.5 space-y-2.5">
+                            <p className="text-xs text-text-muted">
+                              Le meme message part a chaque prospect. Utilise les variables pour personnaliser automatiquement avec son prenom ou son nom.
+                            </p>
+
+                            {/* Explication des variables */}
+                            <div className="rounded-md border border-border bg-panel-raised px-3 py-2 space-y-2">
+                              <p className="text-[10px] font-semibold uppercase tracking-wider text-text-dim">Variables de personnalisation</p>
+                              <div className="flex items-start gap-2">
+                                <code className="shrink-0 rounded border border-accent/30 bg-accent/10 px-1.5 py-0.5 font-mono text-[10px] text-accent">{`{{first_name}}`}</code>
+                                <p className="text-xs text-text-muted">Prenom du prospect tel qu&apos;il apparait sur LinkedIn. <span className="text-text-dim italic">Ex : Marie</span></p>
+                              </div>
+                              <div className="flex items-start gap-2">
+                                <code className="shrink-0 rounded border border-accent/30 bg-accent/10 px-1.5 py-0.5 font-mono text-[10px] text-accent">{`{{last_name}}`}</code>
+                                <p className="text-xs text-text-muted">Nom de famille. <span className="text-text-dim italic">Ex : Dupont</span></p>
+                              </div>
+                              <p className="text-[10px] text-text-dim">Kaizen remplace ces variables par les vraies infos du prospect au moment de l&apos;envoi. Clique sur une variable pour l&apos;inserer dans ton message.</p>
+                            </div>
+
+                            {/* Boutons insertion */}
+                            <div className="flex flex-wrap gap-1">
+                              {IB_VARIABLES.map((v) => (
+                                <button
+                                  key={v.label}
+                                  type="button"
+                                  onClick={() => insertIbVariable(v.label)}
+                                  className="rounded border border-accent/30 bg-accent/10 px-1.5 py-0.5 font-mono text-[10px] text-accent hover:bg-accent/20"
+                                >
+                                  + {v.label}
+                                </button>
+                              ))}
+                            </div>
+
+                            <textarea
+                              ref={ibTextareaRef}
+                              value={ibTemplate}
+                              onChange={(e) => { setIbTemplate(e.target.value); setIbTemplateDirty(true); setIbSaved(false); }}
+                              rows={4}
+                              placeholder="Bonjour {{first_name}}, ravi de te compter dans mon reseau !"
+                              className="w-full resize-none rounded-md border border-border bg-panel px-2.5 py-2 text-xs text-foreground placeholder:text-text-dim outline-none focus:border-accent/50"
+                            />
+
+                            {ibError && <p className="text-xs text-danger">{ibError}</p>}
+                            {ibSaved && !ibError && <p className="text-xs text-positive">Message enregistre.</p>}
+
+                            <button
+                              type="button"
+                              onClick={handleIbSaveTemplate}
+                              disabled={ibSaving}
+                              className={`w-full rounded-md border py-1.5 text-xs font-medium transition-colors disabled:opacity-50 ${
+                                ibTemplateDirty
+                                  ? "border-warning/40 bg-warning/10 text-warning hover:bg-warning/20"
+                                  : "border-accent/30 bg-accent/10 text-accent hover:bg-accent/20"
+                              }`}
+                            >
+                              {ibSaving ? "Enregistrement..." : ibTemplateDirty ? "Enregistrer les modifications" : "Enregistrer"}
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                    </div>
+                  ) : (
+                    <p className="text-xs text-text-dim">Non inclus dans votre forfait actuel.</p>
+                  )}
+                </div>
+              );
+            }
+
+            // Conversation + Intent : comportement original
+            const isEnabled = enabledMap[key] ?? true;
+            const hasAssignment = !!assignmentMap[key];
+
+            return (
+              <div
+                key={key}
+                className={`rounded-lg border p-4 transition-opacity ${
+                  isAllowed ? "border-border bg-panel" : "border-border bg-panel opacity-50"
+                }`}
               >
-                <option value="">-- Aucun agent --</option>
-                {agentsCompatibleWithRole(activeAgents, key).map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.name ?? "Sans nom"}
-                  </option>
-                ))}
-              </select>
-            </div>
-          ))}
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <div className={`shrink-0 ${isAllowed ? iconColor : "text-text-dim"}`}>{icon}</div>
+                    <p className={`text-sm font-semibold ${isAllowed ? "text-foreground" : "text-text-muted"}`}>
+                      {label}
+                    </p>
+                  </div>
+                  {isAllowed ? (
+                    <button
+                      type="button"
+                      disabled={isPending || !hasAssignment}
+                      onClick={() => handleToggleEnabled(key, !isEnabled)}
+                      title={isEnabled ? "Desactiver ce role" : "Activer ce role"}
+                      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors focus:outline-none disabled:cursor-not-allowed disabled:opacity-40 ${
+                        isEnabled && hasAssignment ? "bg-accent" : "bg-border-strong"
+                      }`}
+                    >
+                      <span
+                        className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-sm transition-transform ${
+                          isEnabled && hasAssignment ? "translate-x-4" : "translate-x-0"
+                        }`}
+                      />
+                    </button>
+                  ) : (
+                    <span className="rounded border border-border-strong px-1.5 py-0.5 font-display text-[9px] font-medium uppercase tracking-wider text-text-dim">
+                      Forfait
+                    </span>
+                  )}
+                </div>
+                {isAllowed ? (
+                  <select
+                    className="w-full rounded-md border border-border-strong bg-panel-raised px-2.5 py-2 text-sm text-foreground focus:border-accent focus:outline-none disabled:opacity-50"
+                    value={assignmentMap[key] ?? ""}
+                    onChange={(e) => handleRoleChange(key, e.target.value)}
+                    disabled={isPending}
+                  >
+                    <option value="">-- Aucun agent --</option>
+                    {agentsCompatibleWithRole(activeAgents, key).map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.name ?? "Sans nom"}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <p className="text-xs text-text-dim">Non inclus dans votre forfait actuel.</p>
+                )}
+              </div>
+            );
+          })}
         </div>
       </section>
 
@@ -459,6 +742,7 @@ export default function AgentsClient({
               onCancel={() => setWizardOpen(false)}
               onCreate={handleWizardCreate}
               isPending={isPending}
+              canEditPrompt={canEditPrompt}
             />
           </div>
         </div>
@@ -531,18 +815,26 @@ export default function AgentsClient({
                   placeholder="Ex: Prise de rendez-vous"
                 />
               </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-text-muted">
-                  Prompt
-                </label>
-                <textarea
-                  name="prompt_content"
-                  defaultValue={editingAgent?.prompt_content ?? ""}
-                  rows={7}
-                  className="w-full rounded-md border border-border-strong bg-panel-raised px-3 py-2 text-sm text-foreground focus:border-accent focus:outline-none"
-                  placeholder="Le prompt complet de l'agent..."
-                />
-              </div>
+              {canEditPrompt ? (
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-text-muted">
+                    Prompt
+                  </label>
+                  <textarea
+                    name="prompt_content"
+                    defaultValue={editingAgent?.prompt_content ?? ""}
+                    rows={7}
+                    className="w-full rounded-md border border-border-strong bg-panel-raised px-3 py-2 text-sm text-foreground focus:border-accent focus:outline-none"
+                    placeholder="Le prompt complet de l'agent..."
+                  />
+                </div>
+              ) : (
+                <div className="rounded-md border border-border bg-panel-raised px-3 py-2.5">
+                  <p className="text-xs text-text-dim">
+                    Le prompt est genere automatiquement par le wizard de creation.
+                  </p>
+                </div>
+              )}
               {formError && (
                 <p className="rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
                   {formError}

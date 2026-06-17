@@ -18,6 +18,8 @@ Etat verifie contre le code et la base le 12/06/2026.
 - [x] CRUD complet sur lk_agents (createAgent, updateAgent, archiveAgent, deleteAgent)
 - [x] Wizard de creation d'agent (AgentWizard + promptTemplate : choix structures compiles en prompt)
 - [x] Assignation des roles icebreaker / conversation / intent (upsertAssignment / removeAssignment)
+- [x] Système de droits par client (17/06) : `allowed_roles` (forfait admin, protégé) + `is_enabled` par rôle (préférence client) + `can_edit_prompt` (accès écriture prompt). Page admin `/dashboard/admin` pour Geoffrey. Gardes-fous câblés dans n8n Conversation.
+- [x] Mode icebreaker template (17/06) : choix Agent IA / Message fixe directement dans la carte Icebreaker de /dashboard/agents. Toggle on/off independant. Variables `{{first_name}}` / `{{last_name}}`. Formules n8n documentees (substitution regex + delai humanise depuis config client).
 
 ## Phase 3 — Onboarding + LinkedIn + conversations (EN COURS)
 
@@ -70,6 +72,11 @@ Detail complet dans [docs/architecture-cible.md](./docs/architecture-cible.md). 
 - [ ] Les implementer en nodes deterministes n8n + colonnes/contraintes Supabase, avant et apres l'appel LLM
 - [ ] Arret immediat sur opt-out + etiquetage de la conversation
 - [x] Plafonds de volume quotidien (colonnes daily_invite_limit/daily_message_limit + reglage response_delay_mode ajoutes le 12/06 sur lk_clients_config, page /dashboard/settings cree). RESTE A FAIRE : ces plafonds ne sont PAS encore lus par n8n (Icebreaker, Conversation, ni le wf d'invitations sortantes d'Anthony a synchroniser) -> juste le terrain prepare cote base/UI pour l'instant.
+- [x] Delais de reponse en minutes + creneaux horaires + jours actifs (16/06) : colonnes response_delay_min_minutes/response_delay_max_minutes, active_hours_start/end, active_days, timezone ajoutees a lk_clients_config + colonne scheduled_send_at sur lk_prospects (file d'attente). Page /dashboard/settings refondue : sliders de cadence, presets de delai affichant les minutes, section creneaux (plage horaire + jours + fuseau). Contrat n8n documente dans CLAUDE.md.
+- [x] Bugfixes page /dashboard/settings (17/06) : UPDATE -> upsert (faux succes silencieux quand lk_clients_config absente), listes TIMEZONES et SOCLE_MAX_* centralisees dans delayPresets.ts (etaient dupliquees entre SettingsClient et actions).
+- [x] Architecture file d'attente decidee (16/06 suite) : colonne `pending_reply text` ajoutee sur lk_prospects (migration `add_pending_reply_to_lk_prospects`). Un seul chemin d'envoi via WF Cron (pas de IF, pas de doublon de logique). Cas double message couvert par overwrite naturel de pending_reply.
+- [ ] EN COURS — WF Conversation a modifier : ajouter noeud "Code - Calcul timing" (tirage aleatoire [delay_min, delay_max] + recalage creneau active_hours/active_days/timezone) + modifier "Supabase - Update prospect" pour ecrire pending_reply + scheduled_send_at + supprimer Unipile Envoyer et SB Message sortant de ce WF.
+- [ ] EN COURS — WF Cron a finir (structure Schedule -> Get Many Rows -> IF deja en place) : cabler apres IF -> Unipile Envoyer -> SB Message sortant -> SB Update prospect (remet pending_reply=null, scheduled_send_at=null).
 - [ ] EN PAUSE (mis de cote le 12/06) : branchement du garde-fou "Check plafond quotidien" dans le workflow Conversation (fsSw8bIknV1cAgKx). Plan defini : ajouter un node Supabase "Compteur du jour" (count lk_messages outbound du jour pour le account_id) + un node If comparant a daily_message_limit (deja dans Supabase - Config client via select *), juste apres le node "Supabase - Config client" et avant "Unipile - Historique". Si plafond atteint : Supabase Update lk_prospects.processing_status='idle' et fin de branche. Pas encore implemente, priorite redirigee vers le scraping.
 
 ### 5.2 Socle vs config client + compilateur
@@ -102,10 +109,11 @@ Detail complet dans [docs/architecture-cible.md](./docs/architecture-cible.md). 
 - [x] Feature 2 (mode test agent type Thissmart) : bouton "Tester" sur chaque agent de /dashboard/agents, ouvre une modal de chat qui appelle directement l'API Anthropic (claude-sonnet-4-6) avec le meme gabarit de prompt que le node "Claude - Reponse" du workflow n8n Conversation (system=prompt_content, historique/dernier message/infos prospect/nb echanges). Profil du prospect simule editable (entreprise/poste/resume). Rien n'est ecrit en base. RESTE A FAIRE : Nicolas doit renseigner ANTHROPIC_API_KEY dans .env.local.
 - [x] Clarification des 3 types d'agents sur /dashboard/agents (15/06) : bandeau explicatif des roles, choix du type d'agent (conversation / icebreaker / invitation recue) dans le wizard avec formulaire et gabarit de prompt dedies pour les types "premier message", badge "Premier message" sur les agents concernes, et mode test par persona simule (TestFirstMessageModal) calque sur le node "Claude - Icebreaker" du workflow n8n Icebreaker. Le role "intent" (lk_agent_assignments) est desormais utilise pour "Invitation recue".
 
-## Priorites court terme (au 15/06/2026)
+## Priorites court terme (au 16/06/2026)
 
-1. Test de bout en bout du workflow Conversation (Phase 4) : prerequis pour les features handover manuel et mode test agent decidees en reunion du 15/06
-2. Trancher les 2 decisions strategiques avec Geoffrey, puis sequencer la Phase 5
-3. Cabler le retour Unipile notify_url (Phase 3)
-4. Nettoyer les webhooks doublons de Geoffrey (Phase 4)
-5. EN ATTENTE NICOLAS : reprendre la memoire de curseur de pagination (lk_searches) quand il aura reflechi a la strategie anti-doublons
+1. Finir le WF Conversation : ecrire le noeud "Code - Calcul timing" (tirage aleatoire + recalage creneau) + modifier SB Update prospect + supprimer Unipile Envoyer et SB Message sortant
+2. Finir le WF Cron : cabler les 3 noeuds apres le IF (Unipile Envoyer + SB Message sortant + SB Update prospect qui remet a null)
+3. Test de bout en bout du workflow Conversation avec la file d'attente
+4. Trancher les 2 decisions strategiques avec Geoffrey, puis sequencer la Phase 5
+5. Cabler le retour Unipile notify_url (Phase 3)
+6. EN ATTENTE NICOLAS : reprendre la memoire de curseur de pagination (lk_searches) quand il aura reflechi a la strategie anti-doublons

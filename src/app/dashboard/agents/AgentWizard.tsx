@@ -38,6 +38,7 @@ export default function AgentWizard({
   onCancel,
   onCreate,
   isPending,
+  canEditPrompt = false,
 }: {
   onCancel: () => void;
   onCreate: (data: {
@@ -47,6 +48,7 @@ export default function AgentWizard({
     knowledge_base: unknown;
   }) => void;
   isPending: boolean;
+  canEditPrompt?: boolean;
 }) {
   const [step, setStep] = useState<Step>("type");
   const [agentType, setAgentType] = useState<"conversation" | FirstMessageAgentType | null>(null);
@@ -284,20 +286,23 @@ export default function AgentWizard({
           </p>
         </button>
         <div className="mt-5 flex items-center justify-between">
-          <button
-            type="button"
-            onClick={() =>
-              onCreate({
-                name: "",
-                objectif: "",
-                prompt_content: "",
-                knowledge_base: { ...EMPTY_FORM, agentType: "conversation" },
-              })
-            }
-            className="text-xs text-text-dim underline-offset-2 hover:text-text-muted hover:underline"
-          >
-            Ou creer un agent vierge (avance)
-          </button>
+          {canEditPrompt && (
+            <button
+              type="button"
+              onClick={() =>
+                onCreate({
+                  name: "",
+                  objectif: "",
+                  prompt_content: "",
+                  knowledge_base: { ...EMPTY_FORM, agentType: "conversation" },
+                })
+              }
+              className="text-xs text-text-dim underline-offset-2 hover:text-text-muted hover:underline"
+            >
+              Ou creer un agent vierge (avance)
+            </button>
+          )}
+          {!canEditPrompt && <span />}
           <div className="flex gap-3">
             <button
               type="button"

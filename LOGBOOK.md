@@ -5,6 +5,86 @@ Pour la vue d'ensemble par phases, voir [ROADMAP.md](./ROADMAP.md).
 
 ---
 
+## 2026-06-17 (suite 2 — icebreaker UX refonte)
+
+### Refonte UX card Icebreaker
+
+- Card Icebreaker redessinee : les 3 cards (Icebreaker, Conversation, Invitation recues) restent cote a cote dans la grille `sm:grid-cols-3` (suppression du `col-span-full` precedent).
+- Switcher "Agent IA / Message fixe" remplace par deux options radio empilees verticalement dans la card : cercle rempli = actif, badge "Actif" a droite, l'autre option est grisee.
+- Mode Message fixe en accordeon : textarea + variables ne s'ouvrent que quand l'option est cochee.
+- Explication des variables enrichie dans l'accordeon : `{{first_name}}` (prenom, ex : Marie) + `{{last_name}}` (nom, ex : Dupont) + note "Kaizen remplace ces variables par les vraies infos du prospect au moment de l'envoi".
+- Boutons d'insertion rapide `+ {{first_name}}` / `+ {{last_name}}` conserves, insèrent a la position du curseur.
+- Indicateur de changements non sauves : bouton "Enregistrer les modifications" passe en orange (warning) quand le texte du template est modifie sans avoir ete sauvegarde.
+- Typecheck TypeScript OK.
+
+## 2026-06-17 (suite — icebreaker template mode)
+
+### Icebreaker : mode message fixe
+
+- MIGRATION `add_icebreaker_template_mode` : colonnes `icebreaker_mode text DEFAULT 'ai'` (CHECK ai/template) + `icebreaker_template text` ajoutees a `lk_clients_config`.
+- MIGRATION `add_icebreaker_enabled` : colonne `icebreaker_enabled boolean DEFAULT true` ajoutee a `lk_clients_config` (toggle independant du role assignment).
+- BUG CORRIGE : `updateCadenceSettings` utilisait `.upsert()` -> RLS bloquait (INSERT policy evaluee meme en mode UPDATE). Remplace par `.update().eq("user_id")`.
+- Config icebreaker deplacee de `/dashboard/settings` vers `/dashboard/agents` (decision UX : c est la config d un role, pas un reglage de cadence).
+- Carte Icebreaker redessinee dans AgentsClient : toggle on/off (sur `icebreaker_enabled`, independant de l assignation agent) + switcher "Agent IA / Message fixe" + textarea avec chips variables (`{{first_name}}`, `{{last_name}}`) + bouton Enregistrer dedie.
+- Nouvelles server actions dans `agents/actions.ts` : `updateIcebreakerConfig` + `toggleIcebreakerEnabled`.
+- Variables UI reduites a `{{first_name}}` et `{{last_name}}` (company et job_title retires : non disponibles dans le JSON Unipile UserProfile de base).
+- n8n Icebreaker — formule de substitution template : `{{ $json.icebreaker_template.replace(/\{\{first_name\}\}/g, ...).replace(/\{\{last_name\}\}/g, ...) }}` (regex pour eviter le conflit avec la syntaxe `{{ }}` de n8n).
+- n8n Icebreaker — formule delai humanise : `{{ Math.floor(Math.random() * (max - min + 1)) + min }}` avec min/max lus depuis `Supabase - Config client`.
+- n8n — architecture branche template : Edit Fields (substitution) -> meme Wait node que la branche Claude (pas de Merge node necessaire, n8n traite la branche active).
+
+## 2026-06-17
+
+### Code review + corrections page /dashboard/settings
+
+- Code review sur les fichiers settings (SettingsClient, actions, delayPresets, RangeSlider, page).
+- BUG CORRIGE : `updateCadenceSettings` utilisait `.update().eq("user_id")` -> UPDATE silencieux (0 lignes, pas d'erreur) quand la ligne `lk_clients_config` n'existe pas encore. Remplacé par `.upsert({ ...fields, user_id }, { onConflict: "user_id" })` -> la ligne est créée si absente.
+- BUG CORRIGE : `TIMEZONES` (SettingsClient) et `ALLOWED_TIMEZONES` (actions) étaient deux listes identiques indépendantes. Centralisées dans `delayPresets.ts` (`ALLOWED_TIMEZONES as const`), importées dans les deux fichiers.
+- BUG CORRIGE : `SOCLE_MAX_INVITE_LIMIT = 25` et `SOCLE_MAX_MESSAGE_LIMIT = 40` étaient dupliqués dans SettingsClient et actions. Déplacés dans `delayPresets.ts`, supprimés des anciens fichiers.
+- Bonus : `useState` du mode de délai utilise désormais `isDelayMode()` (déjà importé) au lieu de réimplémenter le même guard inline.
+- Typecheck `npx tsc --noEmit` : OK.
+
+### Bug badge "LinkedIn offline" pour Geoffrey (admin)
+
+- Diagnostic root cause : la policy RLS `admin_read_all_clients` (Geoffrey lit toutes les fiches `lk_clients_config`) faisait remonter 3 lignes, `.maybeSingle()` retournait null -> badge toujours "offline" + fallback `ai_enabled=true` masquait le bug.
+- Suppression du call API Unipile dans `layout.tsx` (check statut devenu `account_id && is_active` en base, aucune requete externe).
+- Ajout filtre `.eq("user_id", user.id)` sur toutes les requetes `.maybeSingle()` sur `lk_clients_config` : `layout.tsx`, `settings/page.tsx`, `agents/actions.ts` (getAccountId), `prospects/actions.ts` (getAccountId), `agents/page.tsx`.
+- Règle documentée en mémoire projet : toute requête single sur `lk_clients_config` doit filtrer user_id.
+
+### Système de droits et feature flags par client
+
+- Décision architecture : deux axes distincts — droits admin (forfait, colonne `allowed_roles` protégée) + préférence client (toggle `is_enabled` dans `lk_agent_assignments`).
+- MIGRATION `add_role_entitlement_and_toggle` : `lk_clients_config.allowed_roles text[]` (def `{icebreaker,conversation,intent}`, `REVOKE UPDATE` pour les clients) + `lk_agent_assignments.is_enabled boolean` (def true).
+- MIGRATION `admin_features_and_rls` : colonne `can_edit_prompt boolean` (def false, protégée par REVOKE) + RLS policy "admin lit toutes les fiches" pour geoffrey@kaizenia.fr + 2 fonctions `SECURITY DEFINER` (`admin_set_allowed_roles`, `admin_set_can_edit_prompt`) — aucune service_role key dans le code.
+- Page `/dashboard/admin` créée : liste tous les clients avec toggles rôles (icebreaker / conversation / invitation reçue) + toggle "Ecriture de prompt libre". Redirige si non-admin.
+- Lien "Admin" ajouté dans la sidebar, visible uniquement pour geoffrey@kaizenia.fr.
+- Page `/dashboard/agents` : cartes rôles ont désormais 3 états (verrouillé forfait / toggle OFF / actif). Champ Prompt et bouton "agent vierge" cachés si `can_edit_prompt = false`.
+- Server action `toggleRoleEnabled` ajoutée dans agents/actions.ts.
+- n8n Conversation : 2 IF nodes ajoutés — `$json.allowed_roles.includes('conversation')` (Boolean) après Supabase Config client + `is_enabled` (Boolean) après Supabase prompt conversation.
+
+---
+
+## 2026-06-16 (suite — file d'attente messages)
+
+- Architecture file d'attente messages décidée et commencée : tout passe par `lk_prospects` (pas de nouvelle table). Un seul chemin d'envoi, le WF Cron finit le travail.
+- MIGRATION APPLIQUEE (omwmbqpbwprpaqaphphg, `add_pending_reply_to_lk_prospects`) : ajout colonne `pending_reply text` sur `lk_prospects` (nullable, vide = rien en attente).
+- Architecture des deux workflows définie :
+  - WF Conversation (à modifier) : après Code-Extraire → garde Supabase Message entrant + ajoute Code Calcul timing (scheduled_send_at avec recalage créneau) + modifie Supabase Update prospect (écrit pending_reply + scheduled_send_at) → STOP. Supprime : Unipile Envoyer + Supabase Message sortant.
+  - WF Cron (à finir, déjà commencé par Nicolas) : Schedule → SB Get Many Rows (scheduled_send_at <= now, ai_enabled=true, pending_reply not null) → IF → Unipile Envoyer → SB Message sortant → SB Update prospect (remet pending_reply={{ null }}, scheduled_send_at={{ null }}).
+- Cas double message analysé : l'overwrite de pending_reply est le comportement correct (le 2e run lit toute l'historique Unipile, génère une réponse qui couvre les deux messages, écrase la 1re réponse en attente).
+- Bugs n8n rencontrés et résolus : IF attendait un booléen sur pending_reply (fix : condition "is not empty") ; prospect_id dans SB Message sortant mappé sur linkedin_id au lieu du UUID Supabase (fix : `{{ $('Supabase - Prospect').item.json.id }}`).
+- Point ouvert : nœud "Code - Calcul timing" pas encore écrit (calcule scheduled_send_at avec tirage aléatoire dans [delay_min, delay_max] + recalage sur prochain créneau active_hours/active_days/timezone lus depuis Supabase - Config client, déjà présent dans le WF).
+
+## 2026-06-16
+
+- Délais de réponse, cadences visuelles et créneaux horaires sur `/dashboard/settings`.
+- MIGRATION APPLIQUEE en base (projet omwmbqpbwprpaqaphphg, `add_delay_bounds_active_hours_queue`) :
+  - `lk_clients_config` : ajout de `response_delay_min_minutes` (def 30), `response_delay_max_minutes` (def 45), `active_hours_start` (def 9), `active_hours_end` (def 19), `active_days int[]` (def {1,2,3,4,5}), `timezone` (def Europe/Paris).
+  - `lk_prospects` : ajout de `scheduled_send_at timestamptz` (file d'attente, écrit par n8n).
+  - Vérifié : policy RLS UPDATE de `lk_clients_config` (`user_id = auth.uid()`) couvre les nouvelles colonnes, pas de policy par colonne à ajouter.
+- UI : presets de délai désormais traduits en minutes (rapide=5-15, normal=30-45, lent=60-120), source de vérité partagée `src/app/dashboard/settings/delayPresets.ts` (importée par SettingsClient ET actions, le serveur recalcule min/max depuis le mode, ne fait pas confiance au client). Cadences invitations/messages transformées en sliders (`RangeSlider.tsx`, range natif stylé, track rempli) plafonnés au socle 25/40. Nouvelle section "Créneaux de réponse" : plage horaire (selects 0-23), boutons jours actifs (L M M J V S D), select fuseau (liste blanche de 5 fuseaux).
+- `actions.ts` : validation des nouveaux champs (bornes minutes via preset, heures 0-23 début<fin, ≥1 jour actif, fuseau en liste blanche), update élargi. `page.tsx` : select et props étendus avec défauts.
+- Contrat n8n documenté dans CLAUDE.md (section pipeline n8n) : tirage aléatoire dans [min,max], recalage sur prochain créneau ouvert via active_hours/active_days/timezone, écriture de scheduled_send_at + cron qui scanne les lignes dues. RIEN n'est encore câblé côté n8n (en pause, ROADMAP 5.1). Typecheck OK.
+
 ## 2026-06-15 (suite 5)
 
 - Workflow n8n "Scrapping" : fix du schema Unipile classic/people sur les filtres de ciblage. L'API `/linkedin/search` (classic, category people) n'accepte `industry` que comme tableau plat d'IDs (include uniquement, pas d'exclusion) et n'a AUCUN champ `role`/exclusion de poste (ca n'existe que sur l'API Recruiter, hors V1). Nodes "Resolve location & build payload1" et "Flatten + metadata1" corriges en consequence. Confirme fonctionnel par Nicolas ("ok ca passe").

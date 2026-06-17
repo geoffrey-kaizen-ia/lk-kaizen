@@ -1,24 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import Sidebar from "./Sidebar";
 
-async function checkUnipileStatus(accountId: string): Promise<boolean> {
-  const baseUrl = process.env.UNIPILE_BASE_URL;
-  const apiKey = process.env.UNIPILE_API_KEY;
-  if (!baseUrl || !apiKey) return false;
-
-  try {
-    const res = await fetch(`${baseUrl}/api/v1/accounts/${accountId}`, {
-      headers: { "X-API-KEY": apiKey, Accept: "application/json" },
-      cache: "no-store",
-    });
-    if (!res.ok) return false;
-    const data = await res.json();
-    return data?.sources?.[0]?.status === "OK";
-  } catch {
-    return false;
-  }
-}
-
 export default async function DashboardLayout({
   children,
 }: {
@@ -29,14 +11,16 @@ export default async function DashboardLayout({
     data: { user },
   } = await supabase.auth.getUser();
 
+  // On filtre sur user_id : sans ca, la policy admin (geoffrey@kaizenia.fr lit
+  // toutes les fiches clients) ferait remonter plusieurs lignes et maybeSingle
+  // renverrait null, ce qui affichait "LinkedIn offline" a tort pour l'admin.
   const { data: config } = await supabase
     .from("lk_clients_config")
-    .select("account_id, ai_enabled")
+    .select("account_id, is_active, ai_enabled")
+    .eq("user_id", user?.id ?? "")
     .maybeSingle();
 
-  const isLinkedinConnected = config?.account_id
-    ? await checkUnipileStatus(config.account_id)
-    : false;
+  const isLinkedinConnected = !!(config?.account_id && config?.is_active);
 
   return (
     <div className="control-grid min-h-screen bg-background">

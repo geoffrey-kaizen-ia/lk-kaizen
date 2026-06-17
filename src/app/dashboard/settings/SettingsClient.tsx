@@ -2,43 +2,83 @@
 
 import { useState, useTransition } from "react";
 import { updateCadenceSettings } from "./actions";
+import {
+  DELAY_PRESETS,
+  DELAY_MODES,
+  isDelayMode,
+  ALLOWED_TIMEZONES,
+  SOCLE_MAX_INVITE_LIMIT,
+  SOCLE_MAX_MESSAGE_LIMIT,
+  type DelayMode,
+} from "./delayPresets";
+import RangeSlider from "./RangeSlider";
 
-const SOCLE_MAX_INVITE_LIMIT = 25;
-const SOCLE_MAX_MESSAGE_LIMIT = 40;
-
-const DELAY_OPTIONS = [
-  {
-    value: "rapide",
+const DELAY_LABELS: Record<DelayMode, { label: string; desc: string }> = {
+  rapide: {
     label: "Rapide",
-    desc: "Reponses dans les premieres minutes. A reserver aux comptes bien etablis.",
+    desc: "A reserver aux comptes bien etablis.",
   },
-  {
-    value: "normal",
+  normal: {
     label: "Normal",
     desc: "Delai humanise standard, recommande pour la plupart des comptes.",
   },
-  {
-    value: "lent",
+  lent: {
     label: "Lent",
     desc: "Reponses plus espacees, recommande pour les comptes recents ou en warm-up.",
   },
+};
+
+// Jours ISO 1=lundi .. 7=dimanche
+const DAYS = [
+  { value: 1, label: "L" },
+  { value: 2, label: "M" },
+  { value: 3, label: "M" },
+  { value: 4, label: "J" },
+  { value: 5, label: "V" },
+  { value: 6, label: "S" },
+  { value: 7, label: "D" },
 ];
+
+const HOURS = Array.from({ length: 24 }, (_, i) => i);
 
 export default function SettingsClient({
   dailyInviteLimit,
   dailyMessageLimit,
   responseDelayMode,
+  activeHoursStart,
+  activeHoursEnd,
+  activeDays,
+  timezone,
 }: {
   dailyInviteLimit: number;
   dailyMessageLimit: number;
   responseDelayMode: string;
+  activeHoursStart: number;
+  activeHoursEnd: number;
+  activeDays: number[];
+  timezone: string;
 }) {
   const [inviteLimit, setInviteLimit] = useState(dailyInviteLimit);
   const [messageLimit, setMessageLimit] = useState(dailyMessageLimit);
-  const [delayMode, setDelayMode] = useState(responseDelayMode);
+  const [delayMode, setDelayMode] = useState<DelayMode>(
+    isDelayMode(responseDelayMode) ? responseDelayMode : "normal"
+  );
+  const [hoursStart, setHoursStart] = useState(activeHoursStart);
+  const [hoursEnd, setHoursEnd] = useState(activeHoursEnd);
+  const [days, setDays] = useState<number[]>(activeDays);
+  const [tz, setTz] = useState(timezone);
+
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+
+  const preset = DELAY_PRESETS[delayMode];
+
+  function toggleDay(value: number) {
+    setDays((prev) =>
+      prev.includes(value) ? prev.filter((d) => d !== value) : [...prev, value]
+    );
+  }
 
   function handleSubmit(formData: FormData) {
     setSaved(false);
@@ -65,42 +105,27 @@ export default function SettingsClient({
           valeurs, jamais depasser le plafond socle.
         </p>
 
-        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div>
-            <label className="mb-1.5 block text-xs font-medium text-text-muted">
-              Invitations acceptees / jour
-            </label>
-            <input
-              type="number"
-              name="daily_invite_limit"
-              min={1}
-              max={SOCLE_MAX_INVITE_LIMIT}
-              value={inviteLimit}
-              onChange={(e) => setInviteLimit(Number(e.target.value))}
-              className="w-full rounded-md border border-border bg-panel-raised px-3 py-2 text-sm text-foreground outline-none focus:border-accent/50"
-            />
-            <p className="mt-1 text-[10px] text-text-dim">
-              Plafond socle : {SOCLE_MAX_INVITE_LIMIT} / jour
-            </p>
-          </div>
-
-          <div>
-            <label className="mb-1.5 block text-xs font-medium text-text-muted">
-              Messages de conversation / jour
-            </label>
-            <input
-              type="number"
-              name="daily_message_limit"
-              min={1}
-              max={SOCLE_MAX_MESSAGE_LIMIT}
-              value={messageLimit}
-              onChange={(e) => setMessageLimit(Number(e.target.value))}
-              className="w-full rounded-md border border-border bg-panel-raised px-3 py-2 text-sm text-foreground outline-none focus:border-accent/50"
-            />
-            <p className="mt-1 text-[10px] text-text-dim">
-              Plafond socle : {SOCLE_MAX_MESSAGE_LIMIT} / jour
-            </p>
-          </div>
+        <div className="mt-5 grid grid-cols-1 gap-6 sm:grid-cols-2">
+          <RangeSlider
+            label="Invitations acceptees / jour"
+            name="daily_invite_limit"
+            value={inviteLimit}
+            min={1}
+            max={SOCLE_MAX_INVITE_LIMIT}
+            onChange={setInviteLimit}
+            valueSuffix="/ jour"
+            hint={`Plafond socle : ${SOCLE_MAX_INVITE_LIMIT} / jour`}
+          />
+          <RangeSlider
+            label="Messages de conversation / jour"
+            name="daily_message_limit"
+            value={messageLimit}
+            min={1}
+            max={SOCLE_MAX_MESSAGE_LIMIT}
+            onChange={setMessageLimit}
+            valueSuffix="/ jour"
+            hint={`Plafond socle : ${SOCLE_MAX_MESSAGE_LIMIT} / jour`}
+          />
         </div>
       </section>
 
@@ -115,38 +140,143 @@ export default function SettingsClient({
         </p>
 
         <div className="mt-4 space-y-2">
-          {DELAY_OPTIONS.map((opt) => (
+          {DELAY_MODES.map((mode) => (
             <label
-              key={opt.value}
-              className={`flex cursor-pointer items-start gap-3 rounded-md border px-3 py-2.5 transition-colors ${
-                delayMode === opt.value
+              key={mode}
+              className={`flex cursor-pointer items-start justify-between gap-3 rounded-md border px-3 py-2.5 transition-colors ${
+                delayMode === mode
                   ? "border-accent/30 bg-accent/10"
                   : "border-border bg-panel-raised hover:border-border-strong"
               }`}
             >
-              <input
-                type="radio"
-                name="response_delay_mode"
-                value={opt.value}
-                checked={delayMode === opt.value}
-                onChange={() => setDelayMode(opt.value)}
-                className="mt-0.5"
-              />
-              <div>
-                <span className="text-sm font-medium text-foreground">{opt.label}</span>
-                <p className="text-xs text-text-dim">{opt.desc}</p>
+              <div className="flex items-start gap-3">
+                <input
+                  type="radio"
+                  name="response_delay_mode"
+                  value={mode}
+                  checked={delayMode === mode}
+                  onChange={() => setDelayMode(mode)}
+                  className="mt-0.5"
+                />
+                <div>
+                  <span className="text-sm font-medium text-foreground">
+                    {DELAY_LABELS[mode].label}
+                  </span>
+                  <p className="text-xs text-text-dim">{DELAY_LABELS[mode].desc}</p>
+                </div>
               </div>
+              <span className="shrink-0 whitespace-nowrap text-xs font-medium text-accent">
+                {DELAY_PRESETS[mode].min}-{DELAY_PRESETS[mode].max} min
+              </span>
             </label>
+          ))}
+        </div>
+
+        <p className="mt-3 text-xs text-text-muted">
+          Reponses envoyees entre{" "}
+          <span className="font-medium text-foreground">{preset.min}</span> et{" "}
+          <span className="font-medium text-foreground">{preset.max}</span> minutes apres
+          le message du prospect.
+        </p>
+      </section>
+
+      {/* Creneaux de reponse */}
+      <section className="rounded-md border border-border bg-panel p-5">
+        <h2 className="font-display text-sm font-semibold uppercase tracking-widest text-text-muted">
+          Creneaux de reponse
+        </h2>
+        <p className="mt-1 text-xs text-text-dim">
+          Plage horaire et jours pendant lesquels l&apos;IA repond. Hors de ces creneaux,
+          les reponses sont mises en file et envoyees au prochain creneau ouvert (pas de
+          reponse le week-end si non coche).
+        </p>
+
+        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div>
+            <label className="mb-1.5 block text-xs font-medium text-text-muted">
+              Heure de debut
+            </label>
+            <select
+              name="active_hours_start"
+              value={hoursStart}
+              onChange={(e) => setHoursStart(Number(e.target.value))}
+              className="w-full rounded-md border border-border bg-panel-raised px-3 py-2 text-sm text-foreground outline-none focus:border-accent/50"
+            >
+              {HOURS.map((h) => (
+                <option key={h} value={h}>
+                  {h}h
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1.5 block text-xs font-medium text-text-muted">
+              Heure de fin
+            </label>
+            <select
+              name="active_hours_end"
+              value={hoursEnd}
+              onChange={(e) => setHoursEnd(Number(e.target.value))}
+              className="w-full rounded-md border border-border bg-panel-raised px-3 py-2 text-sm text-foreground outline-none focus:border-accent/50"
+            >
+              {HOURS.map((h) => (
+                <option key={h} value={h}>
+                  {h}h
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1.5 block text-xs font-medium text-text-muted">
+              Fuseau horaire
+            </label>
+            <select
+              name="timezone"
+              value={tz}
+              onChange={(e) => setTz(e.target.value)}
+              className="w-full rounded-md border border-border bg-panel-raised px-3 py-2 text-sm text-foreground outline-none focus:border-accent/50"
+            >
+              {ALLOWED_TIMEZONES.map((zone) => (
+                <option key={zone} value={zone}>
+                  {zone}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="mt-4">
+          <span className="mb-1.5 block text-xs font-medium text-text-muted">
+            Jours actifs
+          </span>
+          <div className="flex gap-2">
+            {DAYS.map((day) => {
+              const active = days.includes(day.value);
+              return (
+                <button
+                  key={day.value}
+                  type="button"
+                  onClick={() => toggleDay(day.value)}
+                  className={`flex h-9 w-9 items-center justify-center rounded-md border text-sm font-medium transition-colors ${
+                    active
+                      ? "border-accent/30 bg-accent/10 text-accent"
+                      : "border-border bg-panel-raised text-text-dim hover:border-border-strong"
+                  }`}
+                >
+                  {day.label}
+                </button>
+              );
+            })}
+          </div>
+          {/* Champs caches pour transmettre les jours selectionnes dans le FormData */}
+          {days.map((d) => (
+            <input key={d} type="hidden" name="active_days" value={d} />
           ))}
         </div>
       </section>
 
-      {error && (
-        <p className="text-sm text-danger">{error}</p>
-      )}
-      {saved && !error && (
-        <p className="text-sm text-positive">Reglages enregistres.</p>
-      )}
+      {error && <p className="text-sm text-danger">{error}</p>}
+      {saved && !error && <p className="text-sm text-positive">Reglages enregistres.</p>}
 
       <button
         type="submit"

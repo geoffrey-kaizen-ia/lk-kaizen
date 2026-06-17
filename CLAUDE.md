@@ -1,5 +1,26 @@
 # CLAUDE.md — Dashboard SaaS LinkedIn (Kaizen)
 
+## Mots-clés projet
+
+- `open` → invoquer le skill `.claude/skills/open.md` : briefing du matin — où on en est, ce qui reste à faire, points d'attention
+- `close` → invoquer le skill `.claude/skills/close.md` : résumé de fin de session — ce qui a été fait, points ouverts, prochaine étape
+- `logsync` → invoquer le skill `.claude/skills/logsync.md` : analyse la conversation et met à jour LOGBOOK.md + ROADMAP.md
+
+Ces mots-clés sont réservés à ce projet et ne doivent pas être confondus avec les triggers OMC globaux.
+
+## Skills utiles selon le contexte
+
+Proposer ces skills dans les situations suivantes, sans attendre que ce soit demandé :
+
+
+/qa : quand une feature est déclarée terminée, avant un déploiement, après un fix pour vérifier l'absence de régression
+/investigate : dès qu'une erreur, un 500 ou un comportement inattendu est mentionné
+/review : avant tout commit significatif sur main, systématiquement si ça touche auth, RLS ou server actions
+/security-review : dès qu'une modification touche auth, permissions, middleware ou données sensibles
+/run : pour tester une feature UI dans le vrai browser avant de la déclarer terminée
+
+---
+
 Ce repo est le dashboard client du SaaS LinkedIn Kaizen. Les clients y gèrent leurs agents IA de prospection, voient leurs conversations et configurent leur compte.
 
 Documents de pilotage :
@@ -13,6 +34,16 @@ Documents de pilotage :
 - Supabase (Auth + Postgres) pour l'authentification et les données
 - Tailwind CSS pour le style
 - TypeScript
+
+## Déploiement Vercel / GitHub
+
+Le repo GitHub est `https://github.com/teksnocode-create/lk-kaizen` (branche `main`).
+
+**Historique important (15/06/2026)** : jusqu'au 15/06, ce dossier local n'avait PAS de dépôt git initialisé (`.git` absent), alors que le projet Vercel `lk-kaizen` (prj_Xf07eLBWFT39ACR95d7VxUhmvu3s, org sorek-inc) était déjà déployé et à jour (lk-kaizen.vercel.app). Cela veut dire que les déploiements précédents ont été faits via la CLI Vercel directement (`vercel --prod`), PAS via push GitHub — le repo GitHub était resté vide depuis sa création.
+
+Le 15/06/2026, un `git init` + premier commit + push ont été faits depuis ce dossier vers `main` (49 fichiers, état du code au 15/06 ~17h). À ce stade, le repo GitHub n'est probablement PAS encore connecté au projet Vercel dans les settings (pas de section "Git" visible lors de l'inspection `vercel project inspect`).
+
+**Conséquence pratique** : tant que le repo GitHub n'est pas connecté au projet Vercel (Settings → Git → Connect Repository), un `git push` ne déclenche AUCUN déploiement automatique. Il faut soit connecter le repo dans Vercel, soit continuer à déployer via `vercel --prod` en CLI. Vérifier l'état de cette connexion avant de supposer qu'un push met à jour le site en prod.
 - n8n (hors repo) : workflows Icebreaker et Conversation qui écrivent dans les tables lk_*
 
 ## Connexion Supabase
@@ -41,6 +72,22 @@ La table `crm_contacts` (CRM migré depuis Airtable) vit sur le même projet Sup
 | is_active      | boolean   | Compte client actif (PAS le statut LinkedIn)        |
 | ai_enabled     | boolean   | Kill switch global IA du client (toggle sidebar)    |
 | knowledge_base | jsonb     | Infos produit/ton/calendrier                        |
+
+Colonnes de cadence et timing (pilotées par `/dashboard/settings`) :
+
+| Colonne                      | Type      | Rôle                                                          |
+| ---------------------------- | --------- | ------------------------------------------------------------- |
+| daily_invite_limit           | integer   | Plafond invitations/jour (socle 25, baissable seulement)      |
+| daily_message_limit          | integer   | Plafond messages/jour (socle 40, baissable seulement)         |
+| response_delay_mode          | text      | Preset de délai : `rapide` / `normal` / `lent`                |
+| response_delay_min_minutes   | integer   | Borne basse du délai de réponse en minutes (dérivée du preset) |
+| response_delay_max_minutes   | integer   | Borne haute du délai de réponse en minutes                    |
+| active_hours_start           | integer   | Heure de début du créneau (0-23, dans `timezone`)             |
+| active_hours_end             | integer   | Heure de fin du créneau (0-23)                                |
+| active_days                  | int[]     | Jours actifs ISO (1=lundi … 7=dimanche)                       |
+| timezone                     | text      | Fuseau IANA pour interpréter heures et jours (def Europe/Paris) |
+
+Les presets de délai (rapide=5-15, normal=30-45, lent=60-120) vivent dans `src/app/dashboard/settings/delayPresets.ts`, source de vérité partagée entre l'UI et la validation server. Le dashboard écrit le mode ET les bornes min/max correspondantes.
 
 **Règle critique** : à l'inscription, il faut créer (ou lier) une ligne `lk_clients_config` avec `user_id = auth.uid()` du nouvel utilisateur ET son `account_id` Unipile. Sans ce lien, le RLS bloque tout et le client ne voit rien. Aujourd'hui le signup ne crée PAS cette ligne (le lien est fait à la main), c'est le chantier onboarding de la Phase 3.
 
@@ -85,6 +132,7 @@ Clé primaire `(account_id, role)` : un seul agent par rôle et par client à la
 | message_count | integer | Nb de messages échangés                                                    |
 | ai_enabled    | boolean | Off-switch IA par prospect (toggle dans /dashboard/conversations)          |
 | processing_status | text | Verrou anti-doublon n8n (`idle` / `processing`)                          |
+| scheduled_send_at | timestamptz | Date d'envoi cible d'une réponse, calculée par n8n (file d'attente)  |
 
 Plus des colonnes d'enrichissement alimentées par n8n : profile_summary, occupation, job_title, company_name, scoring, scoring_justification, intent_state, reply_sentiment, nb_relance, last_message_sent_at, last_reply_at, chat_id, etc.
 
@@ -109,15 +157,18 @@ C'est n8n qui écrit ici. Le dashboard lit seulement.
 - Garde-fous du workflow Conversation : event=message_received, is_sender=false, message non vide, rejet WhatsApp, IA active, processing_status=idle
 - La stratégie de conversation vit ENTIÈREMENT dans `prompt_content` (lk_agents), pas dans des règles n8n. Le dashboard est l'éditeur de cette stratégie.
 
+### Contrat de timing / cadence à câbler dans n8n (préparé en base le 16/06, PAS encore implémenté)
+
+Le dashboard pose les réglages en base ; n8n doit les consommer ainsi (à faire côté n8n, voir ROADMAP 5.1) :
+
+- **Délai humanisé** : à la réception d'un message à répondre, tirer un entier aléatoire dans `[response_delay_min_minutes, response_delay_max_minutes]` (lus dans `lk_clients_config`).
+- **Créneau** : calculer `now + délai` dans le `timezone` du client. Si le résultat tombe hors `[active_hours_start, active_hours_end]` ou sur un jour absent de `active_days`, RECALER au prochain créneau ouvert (début de la prochaine journée active). Ne JAMAIS poser un nœud Wait fixe de plusieurs jours (fragile au redémarrage d'instance).
+- **File d'attente** : écrire la date cible dans `lk_prospects.scheduled_send_at`. Un cron n8n (ex toutes les 5 min) sélectionne les prospects dont `scheduled_send_at <= now()` ET IA active, envoie la réponse, puis remet `scheduled_send_at = null`.
+- **Cadence** : avant tout envoi, vérifier que le compteur du jour (invitations / messages outbound) n'a pas atteint `daily_invite_limit` / `daily_message_limit` ; sinon, repousser au lendemain.
+
 ## Plan de build par phases
 
-Le détail et les cases cochées vivent dans `ROADMAP.md`. Résumé :
-
-- **Phase 1 (terminée)** : squelette + preuve que la sécurité RLS marche
-- **Phase 2 (terminée)** : CRUD lk_agents + wizard de création + assignation des rôles
-- **Phase 3 (en cours)** : onboarding (signup doit créer/lier lk_clients_config), retour Unipile notify_url, statut LinkedIn fiable. Les pages conversations et stats existent déjà.
-- **Phase 4 (en cours côté n8n)** : pipeline agents conversationnels, test de bout en bout à faire
-- **Phase 5 (cible, voir docs/architecture-cible.md)** : policy engine, compilateur de config, versionnage, harness d'évaluation, boucle d'apprentissage
+L'état d'avancement par phases vit dans `ROADMAP.md` — c'est la source de vérité, ne pas dupliquer ici.
 
 ## Intégration Unipile
 
