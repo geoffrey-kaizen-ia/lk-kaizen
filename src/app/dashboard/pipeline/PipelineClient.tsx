@@ -13,13 +13,16 @@ type Prospect = {
   profile_picture_url: string | null;
   status: string | null;
   scoring: number | null;
+  scoring_justification: string | null;
+  intent_state: string | null;
+  reply_sentiment: string | null;
+  profile_summary: string | null;
   message_count: number | null;
   ai_enabled: boolean | null;
   last_reply_at: string | null;
   last_message_sent_at: string | null;
   created_at: string | null;
   nb_relance: number | null;
-  intent_state: string | null;
 };
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
@@ -28,6 +31,13 @@ const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   in_conversation: { label: "En conversation", color: "text-positive border-positive/30 bg-positive/10" },
   interested: { label: "Interesse", color: "text-warning border-warning/30 bg-warning/10" },
   not_interested: { label: "Pas interesse", color: "text-danger border-danger/30 bg-danger/10" },
+};
+
+const INTENT_LABELS: Record<string, { label: string; color: string }> = {
+  interested: { label: "Interesse", color: "text-positive border-positive/30 bg-positive/10" },
+  neutral: { label: "Neutre", color: "text-text-muted border-border" },
+  not_interested: { label: "Pas interesse", color: "text-danger border-danger/30 bg-danger/10" },
+  opt_out: { label: "Opt-out", color: "text-danger border-danger/50 bg-danger/20" },
 };
 
 function ScoreBadge({ score }: { score: number | null }) {
@@ -197,6 +207,7 @@ export default function PipelineClient({ prospects }: { prospects: Prospect[] })
                 { key: "full_name", label: "Prospect", align: "left" },
                 { key: null, label: "Poste", align: "left" },
                 { key: "status", label: "Statut", align: "left" },
+                { key: "scoring", label: "Score", align: "center" },
                 { key: "message_count", label: "Msgs", align: "center" },
                 { key: "ai_enabled", label: "IA", align: "center" },
                 { key: "last_activity", label: "Derniere activite", align: "left" },
@@ -222,7 +233,7 @@ export default function PipelineClient({ prospects }: { prospects: Prospect[] })
           <tbody className="divide-y divide-border">
             {paginated.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-4 py-12 text-center text-sm text-text-dim">
+                <td colSpan={8} className="px-4 py-12 text-center text-sm text-text-dim">
                   Aucun prospect ne correspond aux filtres.
                 </td>
               </tr>
@@ -284,6 +295,11 @@ export default function PipelineClient({ prospects }: { prospects: Prospect[] })
                       >
                         {statusInfo.label}
                       </span>
+                    </td>
+
+                    {/* Score */}
+                    <td className="px-4 py-3 text-center">
+                      <ScoreBadge score={p.scoring} />
                     </td>
 
                     {/* Msgs */}
@@ -450,6 +466,51 @@ export default function PipelineClient({ prospects }: { prospects: Prospect[] })
                 </span>
               </div>
 
+              {/* Score + Intent */}
+              {(selectedProspect.scoring !== null || selectedProspect.intent_state) && (
+                <div className="grid grid-cols-2 gap-3">
+                  {selectedProspect.scoring !== null && (
+                    <div className="rounded-md border border-border bg-panel-raised px-3 py-2.5">
+                      <p className="text-[10px] uppercase tracking-wider text-text-dim">Score IA</p>
+                      <p className="mt-0.5 text-sm font-semibold">
+                        <ScoreBadge score={selectedProspect.scoring} />
+                      </p>
+                    </div>
+                  )}
+                  {selectedProspect.intent_state && (
+                    <div className="rounded-md border border-border bg-panel-raised px-3 py-2.5">
+                      <p className="text-[10px] uppercase tracking-wider text-text-dim">Intention</p>
+                      <p className="mt-1.5">
+                        {(() => {
+                          const i = INTENT_LABELS[selectedProspect.intent_state ?? ""] ?? { label: selectedProspect.intent_state, color: "text-text-muted border-border" };
+                          return (
+                            <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${i.color}`}>
+                              {i.label}
+                            </span>
+                          );
+                        })()}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Justification du scoring */}
+              {selectedProspect.scoring_justification && (
+                <div className="rounded-md border border-border bg-panel-raised px-3 py-2.5">
+                  <p className="text-[10px] uppercase tracking-wider text-text-dim">Pourquoi ce score</p>
+                  <p className="mt-1 text-xs text-text-muted leading-relaxed">{selectedProspect.scoring_justification}</p>
+                </div>
+              )}
+
+              {/* Sentiment derniere reponse */}
+              {selectedProspect.reply_sentiment && (
+                <div className="rounded-md border border-border bg-panel-raised px-3 py-2.5">
+                  <p className="text-[10px] uppercase tracking-wider text-text-dim">Sentiment dernier message</p>
+                  <p className="mt-0.5 text-sm text-foreground">{selectedProspect.reply_sentiment}</p>
+                </div>
+              )}
+
               {/* Stats */}
               <div className="grid grid-cols-2 gap-3">
                 {[
@@ -465,11 +526,11 @@ export default function PipelineClient({ prospects }: { prospects: Prospect[] })
                 ))}
               </div>
 
-              {/* Intent (quand disponible) */}
-              {selectedProspect.intent_state && (
+              {/* Profil LinkedIn */}
+              {selectedProspect.profile_summary && (
                 <div className="rounded-md border border-border bg-panel-raised px-3 py-2.5">
-                  <p className="text-[10px] uppercase tracking-wider text-text-dim">Intention</p>
-                  <p className="mt-0.5 text-sm text-foreground">{selectedProspect.intent_state}</p>
+                  <p className="text-[10px] uppercase tracking-wider text-text-dim">Profil</p>
+                  <p className="mt-1 text-xs text-text-muted leading-relaxed">{selectedProspect.profile_summary}</p>
                 </div>
               )}
             </div>

@@ -114,14 +114,16 @@ Detail complet dans [docs/architecture-cible.md](./docs/architecture-cible.md). 
 
 - [x] Page /dashboard/pipeline : tableau CRM complet avec filtres (statut, score, IA, recherche texte) + pagination 10/25/50 (17/06). Sidebar renommee : "CRM" + "Recherche prospects".
 - [ ] V2 — Colonne Score (scoring/icp_score) : cachee pour l'instant car jamais alimentee. A reintroduire quand l'agent intent (rôle "Invitation recue") sera cable et produira un score reel par prospect.
-- [ ] V2 — Workflow "Invitation recue" (intent) : quelqu'un envoie une invitation -> accepte auto -> 1er message IA. Webhook Unipile a identifier, workflow n8n a construire.
-- [ ] Relance Icebreaker : si prospect status=invited depuis X jours sans reponse et nb_relance=0 -> envoyer un 2e message. Colonnes nb_relance + last_message_sent_at deja presentes dans lk_prospects. Nouveau WF n8n cron a construire.
+- [ ] ABANDONNE (19/06) — Workflow "Invitation recue" (role intent) : la carte de role a ete retiree de /dashboard/agents, le role `intent` n'est plus expose cote client. L'agent Intent (scoring) reste en PAUSE. Remplace par les Relances ci-dessous.
+- [x] RELANCES (19/06, refonte) : les relances sont desormais des agents de type `relance` dans `lk_agents` + `lk_agent_assignments` (meme paradigme que Icebreaker/Conversation). Carte "Relance" dans la grille 3 colonnes de /dashboard/agents. Modal simplifiee (label "Description", pas de type/objectif, textarea + variables `{{first_name}}`/`{{last_name}}` avec insertion au curseur). Titre modal contextuel. Bouton "Tester" masque. Toggle "Relance" dans /dashboard/admin. RESTE A FAIRE cote n8n (Anthony) : cron lit `lk_agent_assignments role='relance'`, recupere `prompt_content` comme template, envoie si `now >= last_message_sent_at + delay_days`, uniformiser variables sur `{{first_name}}`/`{{last_name}}`.
+- [ ] NETTOYAGE (apres verif n8n d'Anthony) : dropper la table globale `lk_relance_templates`, les colonnes `relance_1/2_template_id` de lk_clients_config et les valeurs `relance_1`/`relance_2` du CHECK `lk_agent_assignments`, devenues orphelines cote dashboard depuis la refonte du 19/06.
 
 ## Feature 3 — Agent intent / scoring (V1, PRIORITE)
 
 - [ ] Migration : ajouter colonne `conversation_summary text` sur `lk_prospects`
 - [ ] n8n WF Conversation : inserer 4 noeuds apres "Supabase - Message entrant" et AVANT "Code - Calcul timing" : (1) Claude - Analyse intent (system prompt fixe Kaizen + historique Unipile en user message), (2) Code - Parse JSON intent, (3) Supabase - Update scoring prospect (scoring, scoring_justification, intent_state, reply_sentiment, conversation_summary), (4) IF - Opt-out ? -> OUI : Supabase desactive IA + STOP / NON : continue vers Calcul timing. Prompt pret, voir session 17/06.
 - [ ] Si `opt_out` detecte : ecrire `ai_enabled=false` + `status=not_interested` automatiquement.
+- [ ] Verification bout en bout (a faire avant de declarer la Feature 3 livree) : des qu'un message est analyse par le node "Claude - Analyse intent", verifier que scoring / intent_state / reply_sentiment sont bien ecrits dans lk_prospects (node "Supabase - Update scoring") ET visibles immediatement dans le CRM dashboard sans rechargement manuel. Tester les 4 cas : interested, neutral, not_interested, opt_out.
 - [ ] Dashboard CRM enrichi :
   - Colonne Score (scoring/10) + colonne Intent (interested/neutral/not_interested/opt_out) avec badge couleur
   - Tooltip sur scoring_justification (pourquoi ce score)
@@ -131,9 +133,10 @@ Detail complet dans [docs/architecture-cible.md](./docs/architecture-cible.md). 
   - Bouton "Reprendre la main" sur les prospects avec IA arretee : ouvre directement la conversation + invite le client a repondre manuellement
   - Reflexion a mener avec Geoffrey : seuil de score en dessous duquel le client est notifie pour intervenir manuellement (ex score <= 3 apres 3 echanges -> alerte + suggestion de message humain)
 
-## Priorites court terme (au 17/06/2026)
+## Priorites court terme (au 19/06/2026)
 
-1. Agent intent / scoring (Feature 3) : migration conversation_summary + node Claude dans WF Conversation + affichage CRM
+0. Relances (Feature dashboard livree le 19/06) : cabler le cron n8n cote Anthony (contrat ci-dessus, Feature 2). Verifier d'abord si un WF n8n lit encore `lk_relance_templates` / `relance_N_template_id` avant le nettoyage DB.
+1. Agent intent / scoring (Feature 3) : EN PAUSE (decision 19/06). Quand reprise : migration conversation_summary + node Claude dans WF Conversation + affichage CRM
 2. Corriger les 3 bugs bloquants du WF Scrapping (Marquer invite sans filtre, double Flatten, branches sans Respond) avant d'utiliser l'auto-invite
 3. Blocage conversation longue : si message_count >= seuil (ex 10), couper l'IA automatiquement (ai_enabled=false sur le prospect) + notifier le client dans le dashboard (badge ou alerte). Evite les boucles IA-IA infinies. Seuil configurable dans lk_clients_config ou fixe en dur dans n8n.
 4. Garde-fou emoji/reaction : dans le WF Conversation, avant l'appel Claude, detecter si le message recu est une reaction emoji seule (pouce, coeur, etc.) ou un message tres court sans texte reel -> ne pas repondre, laisser processing_status=idle. Unipile renvoie parfois des reactions LinkedIn comme messages entrants.

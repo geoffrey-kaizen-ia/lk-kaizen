@@ -286,3 +286,110 @@ export async function toggleIcebreakerEnabled(enabled: boolean) {
   revalidatePath("/dashboard/agents");
   return { error: null };
 }
+
+// --- Relances : liste libre de messages fixes editables, par compte client ---
+
+export async function createRelance() {
+  const supabase = await createClient();
+  const accountId = await getAccountId();
+  if (!accountId) return { error: "Compte non configure" };
+
+  // Position = derniere position + 1 (numerotation continue de la sequence).
+  const { data: last } = await supabase
+    .from("lk_relances")
+    .select("position")
+    .eq("account_id", accountId)
+    .order("position", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const nextPosition = (last?.position ?? 0) + 1;
+
+  const { error } = await supabase.from("lk_relances").insert({
+    account_id: accountId,
+    position: nextPosition,
+    content: "",
+    delay_days: 3,
+    is_active: true,
+  });
+
+  if (error) return { error: error.message };
+  revalidatePath("/dashboard/agents");
+  return { error: null };
+}
+
+export async function updateRelance(
+  id: string,
+  fields: { content?: string; delay_days?: number; is_active?: boolean }
+) {
+  const supabase = await createClient();
+
+  const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  if (fields.content !== undefined) patch.content = fields.content;
+  if (fields.delay_days !== undefined) patch.delay_days = Math.max(0, Math.floor(fields.delay_days));
+  if (fields.is_active !== undefined) patch.is_active = fields.is_active;
+
+  // RLS limite la mise a jour aux relances du compte du client connecte.
+  const { error } = await supabase.from("lk_relances").update(patch).eq("id", id);
+
+  if (error) return { error: error.message };
+  revalidatePath("/dashboard/agents");
+  return { error: null };
+}
+
+export async function deleteRelance(id: string) {
+  const supabase = await createClient();
+  const accountId = await getAccountId();
+  if (!accountId) return { error: "Compte non configure" };
+
+  const { error } = await supabase.from("lk_relances").delete().eq("id", id);
+  if (error) return { error: error.message };
+
+  // Renumerote les positions restantes pour garder une sequence continue 1..n.
+  const { data: remaining } = await supabase
+    .from("lk_relances")
+    .select("id")
+    .eq("account_id", accountId)
+    .order("position", { ascending: true });
+
+  if (remaining) {
+    await Promise.all(
+      remaining.map((r, i) =>
+        supabase.from("lk_relances").update({ position: i + 1 }).eq("id", r.id)
+      )
+    );
+  }
+
+  revalidatePath("/dashboard/agents");
+  return { error: null };
+}
+
+// Echange la position de la relance avec sa voisine (haut/bas).
+export async function moveRelance(id: string, direction: "up" | "down") {
+  const supabase = await createClient();
+  const accountId = await getAccountId();
+  if (!accountId) return { error: "Compte non configure" };
+
+  const { data: rows } = await supabase
+    .from("lk_relances")
+    .select("id, position")
+    .eq("account_id", accountId)
+    .order("position", { ascending: true });
+
+  if (!rows) return { error: null };
+
+  const idx = rows.findIndex((r) => r.id === id);
+  if (idx === -1) return { error: null };
+  const swapIdx = direction === "up" ? idx - 1 : idx + 1;
+  if (swapIdx < 0 || swapIdx >= rows.length) return { error: null };
+
+  const a = rows[idx];
+  const b = rows[swapIdx];
+  await Promise.all([
+    supabase.from("lk_relances").update({ position: b.position }).eq("id", a.id),
+    supabase.from("lk_relances").update({ position: a.position }).eq("id", b.id),
+  ]);
+
+  revalidatePath("/dashboard/agents");
+  return { error: null };
+}

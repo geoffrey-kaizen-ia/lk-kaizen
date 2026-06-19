@@ -5,6 +5,107 @@ Pour la vue d'ensemble par phases, voir [ROADMAP.md](./ROADMAP.md).
 
 ---
 
+## 2026-06-19 (suite 3 — doc Unipile search + fix exclude_industry)
+
+### Documentation Unipile — endpoint de recherche
+
+- Analyse de la doc Unipile existante (networking, messaging, accounts, webhooks) : confirmation que la recherche de prospects n'était PAS documentée côté projet.
+- Réception de la doc officielle Unipile sur `POST /api/v1/linkedin/search` et `GET /api/v1/linkedin/search/parameters` : endpoint qui couvre Classic, Sales Navigator et Recruiter.
+- Créé `docs/unipile/search.md` : endpoint paramètres (résolution IDs localisation/secteur), endpoint recherche (méthode URL copier-coller + paramètres structurés), exemples ATIL (DG/DirCom/Bretagne/secteurs), mapping champs vers `lk_search_results`, pagination via `cursor`, limites LinkedIn par abonnement.
+- Mis à jour `docs/unipile/README.md` : ajout de la ligne search.md dans l'index.
+- Tableau de limitations établi : compte gratuit (~100-150 vues/mois, profils anonymisés, filtres basiques), Premium Business (vues illimitées), Sales Navigator (filtres fins par fonction/ancienneté/séniorité).
+
+### Erreur de parcours — workflow n8n dupliqué
+
+- Workflow n8n "Kaizen - Recherche Prospects LinkedIn" créé par erreur (id AQspiuomkC7sxH0B) sans analyser le workflow "Scrapping" existant qui couvre déjà tout (résolution IDs, pagination curseur, auto-invite, branche send_invitations, table lk_searches).
+- Workflow archivé immédiatement après constat. `.env.local` remis sur l'URL originale `/webhook/Scrapping`.
+
+### Fix exclude_industry — node "Resolve location & build payload1"
+
+- Constat : `search_exclude_industry` était extrait dans "Init config recherche" mais jamais utilisé dans "Resolve location & build payload1".
+- Code corrigé fourni : ajout de `resolveParameter('INDUSTRY', search_exclude_industry)` + construction de `searchBody.industry` au format `{ include: [id], exclude: [id] }` au lieu du tableau plat.
+- Point ouvert : erreur `$('Code - Compute hash')` lors de l'application du fix — diagnostic probable : test du node en isolation sans exécution complète depuis le webhook. Non confirmé côté Nicolas.
+
+---
+
+## 2026-06-19 (suite 2 — UX edition de prompt)
+
+### AgentsClient — edition de prompt amelioree
+
+- Bouton "Plein ecran" ajoute a cote du label "Prompt" dans la modal d'edition (icone expand, visible uniquement si `canEditPrompt = true`).
+- Modal plein ecran : overlay `z-[200]` couvrant tout l'ecran, header avec bouton "Fermer" (icone collapse), textarea `font-mono` qui prend toute la hauteur disponible.
+- Textarea du prompt passe en controle (`useState promptContent`) : les deux textareas (modal normale + plein ecran) sont synchronises en temps reel. La fermeture du plein ecran conserve les modifications.
+- `promptContent` initialise a l'ouverture de la modal (`openEdit`, `openCreateRelance`, wizard agent vierge).
+- TypeScript `npx tsc --noEmit` OK.
+
+### Point ouvert (non encore implemente)
+
+- Point ouvert : quand `can_edit_prompt = false` (defaut pour tout nouveau client), afficher le prompt en lecture seule (texte visible, non editable, aucun bouton ni textarea). Aujourd'hui ce cas affiche juste "Le prompt est genere automatiquement" sans montrer le contenu. Nicolas a confirme l'intention : les clients voient leur prompt mais ne peuvent pas le modifier sans deblocage manuel par Geoffrey.
+
+---
+
+## 2026-06-19 (suite — relances comme agents, refonte UX)
+
+### Decision archi (suite) — relances comme agents dans lk_agent_assignments
+
+- Pivot complet : la section "Relances" autonome (table `lk_relances` + composants `RelancesSection`/`RelanceItem`) abandonnee au profit d'un 3e role "Relance" dans le systeme d'agents existant (`lk_agents` + `lk_agent_assignments`).
+- Raisonnement : coherence avec Icebreaker et Conversation — meme paradigme carte + dropdown + CRUD agent.
+- Grille /dashboard/agents passee de `sm:grid-cols-2` a `sm:grid-cols-3` pour accueillir la carte Relance.
+- Carte Relance : dropdown de selection + bouton "+ Creer une relance" pour instancier un nouvel agent de type relance.
+- Toggle "Relance" ajoute dans `/dashboard/admin` (AdminClient) : admin peut activer/desactiver le role pour chaque client (via `allowed_roles`).
+- `allowed_roles` defaut ajuste : inclut desormais `relance` en plus de `icebreaker` et `conversation`.
+
+### AgentsClient — modal simplifiee pour les relances
+
+- Detection `isRelance` dans le formulaire (via `knowledge_base.agentType === "relance"`) : affichage conditionnel des champs.
+- Champs supprimes pour les relances : type d'agent (select), objectif. Label "Nom" remplace par "Description" (placeholder : "Ex: Relance 1").
+- Textarea message de relance : controle par `useState` + `useRef` pour l'insertion a la position du curseur.
+- Boutons variables `+ {{first_name}}` / `+ {{last_name}}` : insèrent le token a la position du curseur (via `selectionStart`/`setSelectionRange` + `requestAnimationFrame`).
+- Explication en clair ajoutee au-dessus des boutons variables pour les non-techniques.
+- Titre du modal contextuel : "Nouvelle relance" / "Modifier la relance" (et non "Nouvel agent").
+- Bouton "Tester" masque sur les agents de type relance (`getAgentType(agent) !== "relance"`).
+- Typecheck `npx tsc --noEmit` OK.
+
+### Laisse en attente
+
+- Point ouvert : contrat n8n relances (cron d'Anthony) — lire `lk_agent_assignments role='relance'`, recuperer `prompt_content` comme template, envoyer si `now >= last_message_sent_at + delay_days`, uniformiser variables (`{{first_name}}`/`{{last_name}}`).
+- Code mort dans `actions.ts` : `createRelance`, `updateRelance`, `deleteRelance`, `moveRelance` (ancien systeme `lk_relances`) — a supprimer apres nettoyage DB.
+- Table `lk_relances` et colonnes `relance_1/2_template_id` toujours en base — a dropper apres confirmation avec Anthony.
+
+---
+
+## 2026-06-19 (relances par compte + retrait Invitation recue)
+
+### Check interface — bug trouve
+
+- Les cartes Relance 1/2 (ajoutees en debut de session, modele template global) s'affichaient verrouillees "Forfait" pour tous les clients : `allowed_roles` ne contient jamais `relance_1`/`relance_2` (defaut `{icebreaker,conversation,intent}`) et l'admin ne pouvait pas les debloquer. Cause racine du "tout bug sur l'interface".
+- Autres dettes relevees : `lk_relance_templates` est GLOBAL (pas d'account_id) -> "le client modifie une relance" impossible (modifierait pour tous) ; reactivation du mode Agent IA laissait `is_enabled=false` en base ; variables incoherentes (`[prenom]` en base vs `{{first_name}}` dans l'icebreaker).
+
+### Decision archi (validee par Nicolas)
+
+- Agent Intent (scoring) : en PAUSE.
+- Role "Invitation recue" (= role `intent` recycle dans l'UI) : ABANDONNE, carte retiree.
+- Relances refondues : **messages fixes editables, liste libre, par account_id** (et non plus templates globaux + pointeur). Modele lk_relances.
+
+### Implementation
+
+- MIGRATION `rls_relance_templates_read` : policy SELECT manquante ajoutee sur `lk_relance_templates` (RLS active mais aucune policy = tout bloque). [Devenue accessoire avec la refonte, table desormais orpheline cote dashboard.]
+- MIGRATION `create_lk_relances_per_account` : nouvelle table `lk_relances` (id, account_id FK lk_clients_config, position, content, delay_days def 3, is_active, created_at, updated_at) + index (account_id, position). RLS granulaire par commande (SELECT/INSERT/UPDATE/DELETE, pas de FOR ALL), filtree `account_id IN (SELECT ... WHERE user_id = (select auth.uid()))`.
+- `agents/actions.ts` : nouvelles actions `createRelance` / `updateRelance` / `deleteRelance` (renumerote 1..n) / `moveRelance` (haut-bas par echange de position). Anciennes `updateRelanceTemplate` + logique relance_N_template_id supprimees.
+- `agents/page.tsx` : charge `lk_relances` (ordre position) au lieu de `lk_relance_templates`.
+- `AgentsClient.tsx` : ROLES reduit a icebreaker + conversation (grilles passees en `sm:grid-cols-2`). Nouvelle section "Relances" (composants `RelancesSection` + `RelanceItem`) : liste ordonnee, chaque relance = textarea + chips `{{first_name}}`/`{{last_name}}` + champ "envoyer apres X jours sans reponse" + toggle actif + monter/descendre + supprimer + bouton enregistrer (etat "modifie"). Empty state quand aucune relance.
+- `AgentWizard.tsx` + `AgentsClient` : type/option "Invitation recue" retire de la creation d'agent (plumbing `invitation_recue` laisse inerte, partage du code avec l'icebreaker).
+- Typecheck + `npm run build` OK. Route `/dashboard/agents` compile.
+
+### Laisse dormant (suppression destructive NON faite, a confirmer cote n8n d'Anthony)
+
+- Table globale `lk_relance_templates` (5 lignes), colonnes `lk_clients_config.relance_1_template_id` / `relance_2_template_id`, valeurs `relance_1`/`relance_2` du CHECK `lk_agent_assignments`. A nettoyer une fois verifie qu'aucun workflow n8n ne les lit.
+
+### Contrat n8n relances (a cabler par Anthony)
+
+- Cron : prospect connecte, sans reponse depuis le dernier sortant, ai_enabled, pas opt-out -> prochaine relance = `lk_relances` a `position = nb_relance + 1`, si `is_active` ET `now >= last_message_sent_at + delay_days`. Substitue variables, envoie, ecrit lk_messages (message_type=relance_N), incremente nb_relance, met a jour last_message_sent_at + date_relance. Stop des reponse / statut interested-not_interested / plus de relance active. Respecte plafonds + creneaux.
+- Uniformiser les variables cote n8n sur `{{first_name}}` / `{{last_name}}`.
+
 ## 2026-06-17 (suite 4 — CRM drawer + tri colonnes + agent intent)
 
 ### CRM /dashboard/pipeline — enrichissements

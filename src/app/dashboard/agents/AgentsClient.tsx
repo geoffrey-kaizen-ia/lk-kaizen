@@ -15,7 +15,6 @@ import {
 
 const IB_VARIABLES = [
   { label: "{{first_name}}", desc: "Prenom" },
-  { label: "{{last_name}}", desc: "Nom" },
 ];
 import AgentWizard from "./AgentWizard";
 import TestAgentModal from "./TestAgentModal";
@@ -35,6 +34,7 @@ type Assignment = {
   agent_id: string;
   is_enabled: boolean;
 };
+
 
 const ROLES = [
   {
@@ -62,14 +62,14 @@ const ROLES = [
     ),
   },
   {
-    key: "intent",
-    label: "Invitation recue",
+    key: "relance",
+    label: "Relance",
     longDesc:
-      "Quand quelqu'un t'invite sur LinkedIn et que tu acceptes, cet agent lui envoie automatiquement UN SEUL message pour le remercier de la mise en relation et engager la conversation. Pas de conversation non plus : juste un message d'ouverture.",
+      "Message envoye automatiquement quand un prospect ne repond pas. Utilise la variable {{first_name}} pour personnaliser. Le message est fixe, pas d'IA.",
     iconColor: "text-warning",
     icon: (
       <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
       </svg>
     ),
   },
@@ -87,7 +87,7 @@ const FIRST_MESSAGE_ROLE_LABELS: Record<string, string> = {
 const ROLE_AGENT_TYPE: Record<RoleKey, string> = {
   icebreaker: "icebreaker",
   conversation: "conversation",
-  intent: "invitation_recue",
+  relance: "relance",
 };
 
 function getAgentType(agent: Agent): string | null {
@@ -132,6 +132,15 @@ const AGENT_TYPE_ICON: Record<string, { label: string; iconColor: string; icon: 
       </svg>
     ),
   },
+  relance: {
+    label: "Agent relance (message fixe)",
+    iconColor: "text-warning",
+    icon: (
+      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+      </svg>
+    ),
+  },
   invitation_recue: {
     label: "Agent invitation recue (premier message)",
     iconColor: "text-warning",
@@ -147,7 +156,7 @@ const AGENT_TYPE_ICON: Record<string, { label: string; iconColor: string; icon: 
 const AGENT_TYPE_OPTIONS: { value: string; label: string }[] = [
   { value: "conversation", label: "Conversation" },
   { value: "icebreaker", label: "Icebreaker (premier message)" },
-  { value: "invitation_recue", label: "Invitation recue (premier message)" },
+  { value: "relance", label: "Relance (message fixe)" },
 ];
 
 export default function AgentsClient({
@@ -184,6 +193,10 @@ export default function AgentsClient({
   const [ibSaved, setIbSaved] = useState(false);
   const [ibTemplateDirty, setIbTemplateDirty] = useState(false);
   const ibTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const relanceTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const [relanceContent, setRelanceContent] = useState("");
+  const [promptContent, setPromptContent] = useState("");
+  const [promptFullscreen, setPromptFullscreen] = useState(false);
 
   function insertIbVariable(variable: string) {
     const el = ibTextareaRef.current;
@@ -223,6 +236,19 @@ export default function AgentsClient({
     });
   }
 
+  function insertRelanceVariable(variable: string) {
+    const el = relanceTextareaRef.current;
+    if (!el) return;
+    const start = el.selectionStart;
+    const end = el.selectionEnd;
+    const next = relanceContent.slice(0, start) + variable + relanceContent.slice(end);
+    setRelanceContent(next);
+    requestAnimationFrame(() => {
+      el.focus();
+      el.setSelectionRange(start + variable.length, start + variable.length);
+    });
+  }
+
   function handleIbSaveTemplate() {
     setIbError(null);
     setIbSaved(false);
@@ -254,6 +280,15 @@ export default function AgentsClient({
     setWizardOpen(true);
   }
 
+  function openCreateRelance() {
+    setEditingAgent(null);
+    setFormError(null);
+    setPendingAgentType("relance");
+    setRelanceContent("");
+    setPromptContent("");
+    setModalOpen(true);
+  }
+
   function handleWizardCreate(data: {
     name: string;
     objectif: string;
@@ -268,6 +303,7 @@ export default function AgentsClient({
       setEditingAgent(null);
       setFormError(null);
       setPendingAgentType(agentType);
+      setPromptContent("");
       setModalOpen(true);
       return;
     }
@@ -294,6 +330,8 @@ export default function AgentsClient({
     setEditingAgent(agent);
     setFormError(null);
     setPendingAgentType(null);
+    setRelanceContent(agent.prompt_content ?? "");
+    setPromptContent(agent.prompt_content ?? "");
     setModalOpen(true);
   }
 
@@ -367,9 +405,9 @@ export default function AgentsClient({
           Comprendre les agents
         </h2>
         <p className="mb-4 text-sm text-text-muted">
-          Chaque agent joue un seul role a la fois. Les agents Icebreaker et Invitation recue
-          envoient un seul message automatique (pas de discussion), l&apos;agent Conversation gere
-          tous les echanges qui suivent.
+          Chaque agent joue un seul role a la fois. L&apos;agent Icebreaker envoie un seul message
+          automatique (pas de discussion) quand un prospect accepte ton invitation, l&apos;agent
+          Conversation gere tous les echanges qui suivent.
         </p>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           {ROLES.map(({ key, label, longDesc, iconColor, icon }) => (
@@ -488,16 +526,12 @@ export default function AgentsClient({
 
                             {/* Explication des variables */}
                             <div className="rounded-md border border-border bg-panel-raised px-3 py-2 space-y-2">
-                              <p className="text-[10px] font-semibold uppercase tracking-wider text-text-dim">Variables de personnalisation</p>
+                              <p className="text-[10px] font-semibold uppercase tracking-wider text-text-dim">Variable de personnalisation</p>
                               <div className="flex items-start gap-2">
                                 <code className="shrink-0 rounded border border-accent/30 bg-accent/10 px-1.5 py-0.5 font-mono text-[10px] text-accent">{`{{first_name}}`}</code>
                                 <p className="text-xs text-text-muted">Prenom du prospect tel qu&apos;il apparait sur LinkedIn. <span className="text-text-dim italic">Ex : Marie</span></p>
                               </div>
-                              <div className="flex items-start gap-2">
-                                <code className="shrink-0 rounded border border-accent/30 bg-accent/10 px-1.5 py-0.5 font-mono text-[10px] text-accent">{`{{last_name}}`}</code>
-                                <p className="text-xs text-text-muted">Nom de famille. <span className="text-text-dim italic">Ex : Dupont</span></p>
-                              </div>
-                              <p className="text-[10px] text-text-dim">Kaizen remplace ces variables par les vraies infos du prospect au moment de l&apos;envoi. Clique sur une variable pour l&apos;inserer dans ton message.</p>
+                              <p className="text-[10px] text-text-dim">Kaizen remplace cette variable par le vrai prenom du prospect au moment de l&apos;envoi. Clique dessus pour l&apos;inserer dans ton message.</p>
                             </div>
 
                             {/* Boutons insertion */}
@@ -550,7 +584,6 @@ export default function AgentsClient({
               );
             }
 
-            // Conversation + Intent : comportement original
             const isEnabled = enabledMap[key] ?? true;
             const hasAssignment = !!assignmentMap[key];
 
@@ -591,19 +624,30 @@ export default function AgentsClient({
                   )}
                 </div>
                 {isAllowed ? (
-                  <select
-                    className="w-full rounded-md border border-border-strong bg-panel-raised px-2.5 py-2 text-sm text-foreground focus:border-accent focus:outline-none disabled:opacity-50"
-                    value={assignmentMap[key] ?? ""}
-                    onChange={(e) => handleRoleChange(key, e.target.value)}
-                    disabled={isPending}
-                  >
-                    <option value="">-- Aucun agent --</option>
-                    {agentsCompatibleWithRole(activeAgents, key).map((a) => (
-                      <option key={a.id} value={a.id}>
-                        {a.name ?? "Sans nom"}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="space-y-2">
+                    <select
+                      className="w-full rounded-md border border-border-strong bg-panel-raised px-2.5 py-2 text-sm text-foreground focus:border-accent focus:outline-none disabled:opacity-50"
+                      value={assignmentMap[key] ?? ""}
+                      onChange={(e) => handleRoleChange(key, e.target.value)}
+                      disabled={isPending}
+                    >
+                      <option value="">-- Aucun agent --</option>
+                      {agentsCompatibleWithRole(activeAgents, key).map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {a.name ?? "Sans nom"}
+                        </option>
+                      ))}
+                    </select>
+                    {key === "relance" && (
+                      <button
+                        type="button"
+                        onClick={openCreateRelance}
+                        className="w-full rounded-md border border-dashed border-border-strong px-2.5 py-1.5 text-xs text-text-muted transition-colors hover:border-accent/40 hover:text-accent"
+                      >
+                        + Creer une relance
+                      </button>
+                    )}
+                  </div>
                 ) : (
                   <p className="text-xs text-text-dim">Non inclus dans votre forfait actuel.</p>
                 )}
@@ -694,7 +738,7 @@ export default function AgentsClient({
           const agentType = testingAgent.knowledge_base?.agentType;
           const typeLabel =
             (typeof agentType === "string" && FIRST_MESSAGE_ROLE_LABELS[agentType]) ||
-            testingAssignedRoles.find((r) => r === "Icebreaker" || r === "Invitation recue") ||
+            testingAssignedRoles.find((r) => r === "Icebreaker") ||
             "premier message";
           return (
             <TestFirstMessageModal
@@ -759,7 +803,11 @@ export default function AgentsClient({
           <div className="w-full max-w-lg rounded-lg border border-border bg-panel p-6 shadow-xl">
             <div className="mb-5 flex items-center justify-between">
               <h2 className="font-display text-base font-semibold uppercase tracking-widest text-foreground">
-                {editingAgent ? "Modifier l'agent" : "Nouvel agent"}
+                {(() => {
+                  const t = editingAgent ? getAgentType(editingAgent) : pendingAgentType;
+                  if (t === "relance") return editingAgent ? "Modifier la relance" : "Nouvelle relance";
+                  return editingAgent ? "Modifier l'agent" : "Nouvel agent";
+                })()}
               </h2>
               <button
                 onClick={() => setModalOpen(false)}
@@ -769,95 +817,197 @@ export default function AgentsClient({
                 &#x2715;
               </button>
             </div>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              {editingAgent && (
-                <input type="hidden" name="id" value={editingAgent.id} />
-              )}
-              <div>
-                <label className="mb-1 block text-sm font-medium text-text-muted">
-                  Nom <span className="text-danger">*</span>
-                </label>
-                <input
-                  name="name"
-                  required
-                  defaultValue={editingAgent?.name ?? ""}
-                  className="w-full rounded-md border border-border-strong bg-panel-raised px-3 py-2 text-sm text-foreground focus:border-accent focus:outline-none"
-                  placeholder="Ex: Agent Icebreaker SaaS"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-text-muted">
-                  Type d&apos;agent
-                </label>
-                <select
-                  name="agent_type"
-                  defaultValue={
-                    (editingAgent ? getAgentType(editingAgent) : pendingAgentType) ?? ""
-                  }
-                  className="w-full rounded-md border border-border-strong bg-panel-raised px-3 py-2 text-sm text-foreground focus:border-accent focus:outline-none"
-                >
-                  <option value="">Non defini</option>
-                  {AGENT_TYPE_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-text-muted">
-                  Objectif
-                </label>
-                <input
-                  name="objectif"
-                  defaultValue={editingAgent?.objectif ?? ""}
-                  className="w-full rounded-md border border-border-strong bg-panel-raised px-3 py-2 text-sm text-foreground focus:border-accent focus:outline-none"
-                  placeholder="Ex: Prise de rendez-vous"
-                />
-              </div>
-              {canEditPrompt ? (
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-text-muted">
-                    Prompt
-                  </label>
-                  <textarea
-                    name="prompt_content"
-                    defaultValue={editingAgent?.prompt_content ?? ""}
-                    rows={7}
-                    className="w-full rounded-md border border-border-strong bg-panel-raised px-3 py-2 text-sm text-foreground focus:border-accent focus:outline-none"
-                    placeholder="Le prompt complet de l'agent..."
-                  />
-                </div>
-              ) : (
-                <div className="rounded-md border border-border bg-panel-raised px-3 py-2.5">
-                  <p className="text-xs text-text-dim">
-                    Le prompt est genere automatiquement par le wizard de creation.
-                  </p>
-                </div>
-              )}
-              {formError && (
-                <p className="rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
-                  {formError}
-                </p>
-              )}
-              <div className="flex justify-end gap-3 pt-1">
-                <button
-                  type="button"
-                  onClick={() => setModalOpen(false)}
-                  className="rounded-md border border-border-strong px-4 py-2 text-sm text-text-muted hover:bg-panel-raised hover:text-foreground"
-                >
-                  Annuler
-                </button>
-                <button
-                  type="submit"
-                  disabled={isPending}
-                  className="rounded-md border border-accent/30 bg-accent/10 px-4 py-2 text-sm font-medium text-accent transition-colors hover:bg-accent/20 disabled:opacity-50"
-                >
-                  {isPending ? "Enregistrement..." : "Enregistrer"}
-                </button>
-              </div>
-            </form>
+            {(() => {
+              const formType = editingAgent ? (getAgentType(editingAgent) ?? "") : (pendingAgentType ?? "");
+              const isRelance = formType === "relance";
+              return (
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  {editingAgent && (
+                    <input type="hidden" name="id" value={editingAgent.id} />
+                  )}
+                  {/* Pour une relance : type fixe en hidden, pas de type selector */}
+                  {isRelance ? (
+                    <input type="hidden" name="agent_type" value="relance" />
+                  ) : null}
+
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-text-muted">
+                      {isRelance ? "Description" : "Nom"} <span className="text-danger">*</span>
+                    </label>
+                    <input
+                      name="name"
+                      required
+                      defaultValue={editingAgent?.name ?? ""}
+                      className="w-full rounded-md border border-border-strong bg-panel-raised px-3 py-2 text-sm text-foreground focus:border-accent focus:outline-none"
+                      placeholder={isRelance ? "Ex: Relance 1" : "Ex: Agent Icebreaker SaaS"}
+                    />
+                  </div>
+
+                  {!isRelance && (
+                    <>
+                      <div>
+                        <label className="mb-1 block text-sm font-medium text-text-muted">
+                          Type d&apos;agent
+                        </label>
+                        <select
+                          name="agent_type"
+                          defaultValue={
+                            (editingAgent ? getAgentType(editingAgent) : pendingAgentType) ?? ""
+                          }
+                          className="w-full rounded-md border border-border-strong bg-panel-raised px-3 py-2 text-sm text-foreground focus:border-accent focus:outline-none"
+                        >
+                          <option value="">Non defini</option>
+                          {AGENT_TYPE_OPTIONS.filter((o) => o.value !== "relance").map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-sm font-medium text-text-muted">
+                          Objectif
+                        </label>
+                        <input
+                          name="objectif"
+                          defaultValue={editingAgent?.objectif ?? ""}
+                          className="w-full rounded-md border border-border-strong bg-panel-raised px-3 py-2 text-sm text-foreground focus:border-accent focus:outline-none"
+                          placeholder="Ex: Prise de rendez-vous"
+                        />
+                      </div>
+                    </>
+                  )}
+
+                  {isRelance ? (
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-text-muted">
+                        Message de relance
+                      </label>
+                      <p className="mb-2 text-xs text-text-dim">
+                        Tu peux personnaliser ton message avec le prenom du prospect. Clique sur la variable pour l&apos;inserer — Kaizen la remplacera automatiquement au moment de l&apos;envoi.
+                      </p>
+                      <div className="mb-2 flex flex-wrap gap-1">
+                        {IB_VARIABLES.map((v) => (
+                          <button
+                            key={v.label}
+                            type="button"
+                            onClick={() => insertRelanceVariable(v.label)}
+                            title={v.desc}
+                            className="rounded border border-accent/30 bg-accent/10 px-1.5 py-0.5 font-mono text-[10px] text-accent hover:bg-accent/20"
+                          >
+                            + {v.label}
+                          </button>
+                        ))}
+                      </div>
+                      <textarea
+                        ref={relanceTextareaRef}
+                        name="prompt_content"
+                        value={relanceContent}
+                        onChange={(e) => setRelanceContent(e.target.value)}
+                        rows={4}
+                        className="w-full resize-none rounded-md border border-border-strong bg-panel-raised px-3 py-2 text-sm text-foreground focus:border-accent focus:outline-none"
+                        placeholder="Bonjour {{first_name}}, je reviens vers toi..."
+                      />
+                    </div>
+                  ) : canEditPrompt ? (
+                    <div>
+                      <div className="mb-1 flex items-center justify-between">
+                        <label className="text-sm font-medium text-text-muted">
+                          Prompt
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => setPromptFullscreen(true)}
+                          title="Ouvrir en plein ecran"
+                          className="flex items-center gap-1 rounded px-2 py-0.5 text-xs text-text-dim hover:bg-panel-raised hover:text-foreground"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/>
+                            <line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/>
+                          </svg>
+                          Plein ecran
+                        </button>
+                      </div>
+                      <textarea
+                        name="prompt_content"
+                        value={promptContent}
+                        onChange={(e) => setPromptContent(e.target.value)}
+                        rows={7}
+                        className="w-full rounded-md border border-border-strong bg-panel-raised px-3 py-2 text-sm text-foreground focus:border-accent focus:outline-none"
+                        placeholder="Le prompt complet de l'agent..."
+                      />
+                    </div>
+                  ) : (
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-text-muted">
+                        Prompt
+                      </label>
+                      <div className="max-h-64 overflow-y-auto rounded-md border border-border bg-panel-raised px-3 py-2.5">
+                        <p className="whitespace-pre-wrap font-mono text-xs text-text-dim">
+                          {editingAgent?.prompt_content ?? "Aucun prompt genere."}
+                        </p>
+                      </div>
+                      <p className="mt-1 text-xs text-text-dim">
+                        Lecture seule — modifiable uniquement par l&apos;equipe Kaizen.
+                      </p>
+                    </div>
+                  )}
+
+                  {formError && (
+                    <p className="rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
+                      {formError}
+                    </p>
+                  )}
+                  <div className="flex justify-end gap-3 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setModalOpen(false)}
+                      className="rounded-md border border-border-strong px-4 py-2 text-sm text-text-muted hover:bg-panel-raised hover:text-foreground"
+                    >
+                      Annuler
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isPending}
+                      className="rounded-md border border-accent/30 bg-accent/10 px-4 py-2 text-sm font-medium text-accent transition-colors hover:bg-accent/20 disabled:opacity-50"
+                    >
+                      {isPending ? "Enregistrement..." : "Enregistrer"}
+                    </button>
+                  </div>
+                </form>
+              );
+            })()}
           </div>
+        </div>
+      )}
+
+      {/* Modal plein ecran edition du prompt */}
+      {promptFullscreen && (
+        <div
+          className="fixed inset-0 z-[200] flex flex-col bg-background"
+          onClick={(e) => { if (e.target === e.currentTarget) setPromptFullscreen(false); }}
+        >
+          <div className="flex items-center justify-between border-b border-border px-6 py-3">
+            <span className="text-sm font-medium text-text-muted">Prompt</span>
+            <button
+              type="button"
+              onClick={() => setPromptFullscreen(false)}
+              className="flex items-center gap-1.5 rounded-md border border-border-strong px-3 py-1.5 text-xs text-text-muted hover:bg-panel-raised hover:text-foreground"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/>
+                <line x1="10" y1="14" x2="21" y2="3"/><line x1="3" y1="21" x2="14" y2="10"/>
+              </svg>
+              Fermer
+            </button>
+          </div>
+          <textarea
+            value={promptContent}
+            onChange={(e) => setPromptContent(e.target.value)}
+            className="flex-1 resize-none bg-panel-raised px-6 py-4 font-mono text-sm text-foreground focus:outline-none"
+            placeholder="Le prompt complet de l'agent..."
+            autoFocus
+          />
         </div>
       )}
     </div>
@@ -910,13 +1060,15 @@ function AgentCard({
           )}
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <button
-            onClick={() => onTest(agent)}
-            disabled={isPending || !agent.prompt_content}
-            className="rounded-md border border-accent/30 bg-accent/10 px-3 py-1.5 text-xs font-medium text-accent transition-colors hover:bg-accent/20 disabled:opacity-50"
-          >
-            Tester
-          </button>
+          {getAgentType(agent) !== "relance" && (
+            <button
+              onClick={() => onTest(agent)}
+              disabled={isPending || !agent.prompt_content}
+              className="rounded-md border border-accent/30 bg-accent/10 px-3 py-1.5 text-xs font-medium text-accent transition-colors hover:bg-accent/20 disabled:opacity-50"
+            >
+              Tester
+            </button>
+          )}
           <button
             onClick={() => onEdit(agent)}
             disabled={isPending}
@@ -948,3 +1100,4 @@ function AgentCard({
     </li>
   );
 }
+

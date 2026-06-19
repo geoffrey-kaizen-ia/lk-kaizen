@@ -234,23 +234,6 @@ export default function AgentWizard({
               Envoie automatiquement UN SEUL message dès qu&apos;un prospect accepte une invitation que tu lui as envoyee. C&apos;est l&apos;agent du role &quot;Icebreaker&quot;.
             </p>
           </button>
-          <button
-            type="button"
-            onClick={() => {
-              setAgentType("invitation_recue");
-              setFmForm(EMPTY_FIRST_MESSAGE_FORM);
-              setFmAgentName("");
-              setStep("fm_form");
-            }}
-            className="w-full rounded-lg border border-warning/30 bg-warning/10 p-4 text-left transition-colors hover:border-warning/50"
-          >
-            <p className="text-sm font-semibold text-foreground">
-              Agent invitation recue <span className="font-normal text-text-muted">(premier message)</span>
-            </p>
-            <p className="mt-0.5 text-xs text-text-muted">
-              Envoie automatiquement UN SEUL message de remerciement quand quelqu&apos;un t&apos;invite sur LinkedIn et que tu acceptes. C&apos;est l&apos;agent du role &quot;Invitation recue&quot;.
-            </p>
-          </button>
         </div>
         <div className="mt-5 flex justify-end">
           <button

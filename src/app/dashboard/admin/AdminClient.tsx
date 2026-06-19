@@ -3,11 +3,11 @@
 import { useState, useTransition } from "react";
 import { adminSetAllowedRoles, adminSetCanEditPrompt } from "./actions";
 
-const ALL_ROLES = ["icebreaker", "conversation", "intent"] as const;
+const ALL_ROLES = ["icebreaker", "conversation", "relance"] as const;
 const ROLE_LABELS: Record<string, string> = {
   icebreaker: "Icebreaker",
   conversation: "Conversation",
-  intent: "Invitation recue",
+  relance: "Relance",
 };
 
 type Client = {

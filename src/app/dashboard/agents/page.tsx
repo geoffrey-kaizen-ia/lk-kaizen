@@ -27,7 +27,11 @@ export default async function AgentsPage({
     data: { user },
   } = await supabase.auth.getUser();
 
-  const [{ data: agents, error }, { data: assignments }, { data: clientConfig }] = await Promise.all([
+  const [
+    { data: agents, error },
+    { data: assignments },
+    { data: clientConfig },
+  ] = await Promise.all([
     supabase
       .from("lk_agents")
       .select("id, name, objectif, prompt_content, is_active, knowledge_base"),
@@ -64,7 +68,7 @@ export default async function AgentsPage({
         <AgentsClient
           agents={(agents ?? []) as Agent[]}
           assignments={(assignments ?? []) as Assignment[]}
-          allowedRoles={(clientConfig?.allowed_roles ?? ["icebreaker", "conversation", "intent"]) as string[]}
+          allowedRoles={(clientConfig?.allowed_roles ?? ["icebreaker", "conversation", "relance"]) as string[]}
           canEditPrompt={clientConfig?.can_edit_prompt ?? false}
           icebreakerMode={(clientConfig?.icebreaker_mode as "ai" | "template") ?? "ai"}
           icebreakerTemplate={clientConfig?.icebreaker_template ?? ""}

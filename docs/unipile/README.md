@@ -11,6 +11,7 @@ Lire ce fichier en premier pour savoir quel fichier consulter. Ne pas charger le
 | Lister chats, lire/envoyer des messages LinkedIn | [messaging.md](messaging.md) |
 | Écouter les événements en temps réel (webhooks) | [webhooks.md](webhooks.md) |
 | Lister / envoyer des invitations LinkedIn ; réseau de connexions | [networking.md](networking.md) |
+| Chercher des prospects (personnes, entreprises, posts) par localisation / secteur / titre | [search.md](search.md) |
 
 ## Rappels critiques (toujours valables)
 

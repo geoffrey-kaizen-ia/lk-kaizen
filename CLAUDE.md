@@ -91,6 +91,17 @@ Les presets de délai (rapide=5-15, normal=30-45, lent=60-120) vivent dans `src/
 
 **Règle critique** : à l'inscription, il faut créer (ou lier) une ligne `lk_clients_config` avec `user_id = auth.uid()` du nouvel utilisateur ET son `account_id` Unipile. Sans ce lien, le RLS bloque tout et le client ne voit rien. Aujourd'hui le signup ne crée PAS cette ligne (le lien est fait à la main), c'est le chantier onboarding de la Phase 3.
 
+Colonnes de droits d'accès (pilotées manuellement par l'admin Geoffrey dans Supabase) :
+
+| Colonne           | Type      | Rôle                                                                         |
+| ----------------- | --------- | ---------------------------------------------------------------------------- |
+| allowed_roles     | text[]    | Rôles autorisés pour ce client (ex: `{icebreaker,conversation}`)             |
+| can_edit_prompt   | boolean   | Peut modifier le prompt directement (sinon wizard uniquement)                |
+| icebreaker_mode   | text      | `ai` (agent IA) ou `template` (message fixe)                                 |
+| icebreaker_template | text    | Message fixe si mode template                                                |
+| icebreaker_enabled | boolean  | Icebreaker actif ou non                                                      |
+| relances_enabled  | boolean   | Option relances activee pour ce client (default true, admin peut desactiver) |
+
 **Angle mort connu** : le badge "LinkedIn connecté" du dashboard repose sur `is_active`, qui veut dire "compte client actif" et pas "LinkedIn réellement connecté". À remplacer par une colonne `linkedin_status` + `last_connected_at` alimentée par le webhook Unipile (voir ROADMAP).
 
 ### lk_agents — la bibliothèque de prompts (coeur du produit)
@@ -149,6 +160,20 @@ C'est n8n qui écrit ici. Le dashboard lit, et peut UNIQUEMENT mettre à jour `a
 | sent_at     | timestamptz | Date d'envoi     |
 
 C'est n8n qui écrit ici. Le dashboard lit seulement.
+
+### lk_relances — les messages de relance (par client, CRUD complet)
+
+Liste libre et ordonnée de messages fixes envoyés automatiquement quand un prospect ne répond pas. Introduite le 19/06/2026, elle remplace l'ancien modèle (table globale `lk_relance_templates` + pointeurs `relance_1/2_template_id` sur `lk_clients_config`, désormais orphelins en attente de nettoyage).
+
+| Colonne    | Type    | Rôle                                                      |
+| ---------- | ------- | --------------------------------------------------------- |
+| account_id | text    | Le client (FK lk_clients_config)                          |
+| position   | integer | Ordre dans la séquence (1, 2, 3…)                         |
+| content    | text    | Le message, variables `{{first_name}}` / `{{last_name}}`  |
+| delay_days | integer | Jours sans réponse avant envoi (déf. 3)                   |
+| is_active  | boolean | Relance active ou non                                     |
+
+Le client a un CRUD complet sur SES relances (RLS granulaire par account_id, pas de FOR ALL). Édition dans la section "Relances" de `/dashboard/agents`. Contrat n8n (cron de relance) : prochaine relance = `position = nb_relance + 1`, envoyée si `is_active` et `now >= last_message_sent_at + delay_days`. Le rôle "Invitation reçue" (ancien usage du rôle `intent`) a été retiré de l'UI à cette occasion ; l'agent Intent (scoring) est en pause.
 
 ## Pipeline n8n (hors repo, mais le dashboard en dépend)
 
