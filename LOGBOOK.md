@@ -3,6 +3,101 @@
 Journal chronologique des sessions de travail. Le plus recent en haut.
 Pour la vue d'ensemble par phases, voir [ROADMAP.md](./ROADMAP.md).
 
+## 2026-06-22 (suite — debug prompt template icebreaker)
+
+### Corrections prompt icebreaker + modal de test
+
+- **Diagnostic root cause** : le résultat `{"message": "", "profil_insuffisant": true}` venait de 3 problèmes cumulés — (1) prompt utilisateur trop pauvre dans `testFirstMessage` (juste prénom/headline/résumé en texte libre), (2) garde-fou `profil_insuffisant` trop sensible dans le prompt système, (3) prompt stocké en base compilé avec l'ancienne version du garde-fou.
+- `TestFirstMessageModal.tsx` simplifié : 3 champs uniquement (prénom, headline, à-propos optionnel). L'agent compose avec ce qu'il a, sans nécessiter de données riches.
+- `actions.ts` — `testFirstMessage` : prompt utilisateur restructuré en lignes étiquetées (Nom complet / Headline / A-propos). Ajout d'un bloc `<override_test>` appendé au prompt système en mode test uniquement : force `profil_insuffisant: false` quelle que soit la version du prompt stocké en base. Comportement prod (n8n) non affecté.
+- `firstMessageTemplate.ts` — section `<donnees_prospect>` : précise que le profil arrive en texte libre et qu'un headline seul suffit pour une accroche de niveau d. Section `<garde_fous>` : `profil_insuffisant` ne se déclenche que si les données sont VRAIMENT vides (ni nom, ni headline, ni secteur).
+- `TestFirstMessageModal.tsx` : parse le JSON de sortie et affiche le message proprement, ou le brut si le JSON est invalide.
+
+---
+
+## 2026-06-22 (suite — corrections page prospects + panneau messages)
+
+### Corrections TypeScript et UX ProspectsClient
+
+- Panneau "File d'attente" remplacé par "Messages aujourd'hui" : barre de progression X/40, texte "X restants" ou "Quota atteint", couleur orange si quota dépassé.
+- Props `dailyInviteLimit`, `messagesToday`, `dailyMessageLimit` câblés depuis `page.tsx` (query `lk_messages` outbound + `daily_message_limit` dans `lk_clients_config`).
+- Compteur `invitesToday` corrigé : source `lk_search_results.sent_at` (plus `lk_prospects`) → évite de dépasser la limite avec les connexions organiques.
+- 4 erreurs TypeScript corrigées : `dailyLimit` → `dailyInviteLimit` (2 occurrences), conditions `{qp.keywords && ...}` typées `unknown` → `{!!qp.keywords && ...}`.
+
+---
+
+## 2026-06-22 (suite — workflow Relance + UI relances)
+
+### Workflow n8n Relance (tSXHBrq1Kti67qYx) — refonte complète
+
+- Workflow "Relance" entièrement réécrit via l'API n8n (PUT) : 8 noeuds, architecture single-loop.
+- Ancienne architecture supprimée : 2 branches parallèles figées (`lk_agent_assignments` role=`relance_1`/`relance_2`, fenêtres de délai hardcodées 5-10j / 12-18j, noeuds ENVOI disabled).
+- Nouvelle architecture : `Get_Prospects` (tous actifs, statut != invited/interested/not_interested) → `Loop_Prospects` → `Get_Relance_Step` (lit `lk_relances` à `position = nb_relance + 1`, `alwaysOutputData: true`) → `Code_Check_And_Build` (delay check dynamique + substitution `{{first_name}}`/`{{last_name}}`) → `IF_Send` → `ENVOI_Unipile` (HTTP) → `Update_Prospect` (Supabase) → `Log_Message` (Supabase).
+- Guards dans le Code node : skip si pas de relance à cette position, pas de `chat_id`, pas de `last_message_sent_at`, délai pas encore écoulé. Variable `delay_days` lue dynamiquement depuis `lk_relances`.
+- Supporte N niveaux de relance sans modifier le workflow (scale automatique).
+
+### UI /dashboard/agents — Section "Relances automatiques"
+
+- Section dédiée "Relances automatiques" ajoutée entre "Roles actifs" et "Mes agents".
+- Deux cartes côte à côte (Relance 1 et Relance 2), chacune avec : toggle actif/inactif (sauvegarde immédiate), textarea message, boutons `{{first_name}}`/`{{last_name}}` avec insertion au curseur, champ "Envoyer après X jours", bouton save orange si modifié.
+- Relance 2 : bouton "+ Configurer" visible uniquement si Relance 1 existe.
+- Section verrouillée (opacity + pointer-events-none) si `relance` absent de `allowed_roles`.
+- Grid "Roles actifs" passée de 3 à 2 colonnes (icebreaker + conversation), relance retirée du grid.
+- `AGENT_TYPE_OPTIONS` : option "Relance" retirée (on ne crée plus de relances via les agents).
+- `page.tsx` : query `lk_relances` ajoutée (SELECT id, position, content, delay_days, is_active, ORDER BY position), prop `relances` passée à `AgentsClient`.
+- TypeScript `npx tsc --noEmit` OK.
+
+---
+
+## 2026-06-22 — Système de campagnes progressif + refonte UI Prospects
+
+### Cron scraping campagnes (n8n)
+
+- Nouveau workflow "Cron - Scraping campagnes" créé via API n8n (5 noeuds), puis fusionné dans le workflow `u9NRd0JkerDhuipM` comme branche 2 (Schedule 8h30).
+- Branche 2 : lit les campagnes actives dans `lk_searches`, scrape 50 profils/jour via Unipile avec cursor pagination, insère dans `lk_search_results` (search_id = campaign UUID), PATCH `lk_searches` (last_cursor, total_scraped, status). Testé et validé manuellement.
+- Hash SHA-256 côté dashboard vs DJB2 côté ancien WF : nouveau cron bypasse le problème en PATCHant par `id` (UUID) et non `query_hash`.
+- Noeud n8n "Code - Init scraping" mis à jour : gestion de la valeur `"2,3"` pour le niveau de relation (→ `['2e degré', '3e degré et +']`).
+
+### Refonte page /dashboard/prospects
+
+- Page restructurée en 3 zones : bandeau quotas du jour (invitations + file d'attente), liste campagnes compacte, table "File d'attente" style Waalaxy + section "À valider" en bas.
+- Bandeau quotas : invitations aujourd'hui (X/25, barre de progression), file d'attente (N profils + estimation en jours). Source : `lk_prospects.created_at` pour le comptage journalier + `lk_clients_config.daily_invite_limit`.
+- Table file d'attente : colonnes Prospect / Campagne / Exécution (Ce soir / Demain soir / Dans X jours), calculée à partir de la position dans la queue et du quota restant.
+- Clic sur une carte campagne = filtre les sections du dessous. État vide explicite quand filtre actif sans profils (message adapté selon mode auto/validation).
+- Modal création campagne refaite : niveau de relation en 3 radio-boutons expliqués (2e+3e recommandé, 2e seul, 3e+), labels et placeholders clarifiés.
+- Filtre Conversations : `message_count > 0` — les prospects sans échange n'apparaissent plus.
+
+### Corrections base
+
+- `daily_invite_limit` de Nicolas remis à 25 (était à 17 par erreur).
+- Toutes les campagnes et résultats de recherche de Nicolas supprimés pour repartir proprement.
+- Point ouvert : `total_scraped` peut être décalé si le noeud MAJ n8n échoue après un INSERT réussi — à surveiller.
+
+---
+
+## 2026-06-22 — Cron d'envoi d'invitations : debug et correction
+
+### File d'attente d'invitations quotidiennes
+
+- Migration Supabase `campagnes_prospection_v1` appliquee : extension de `lk_searches` (name, target_count, mode, priority, status, total_scraped, total_sent) et `lk_search_results` (validated_at, sent_at, error_code, network_distance, public_identifier, pending_invitation), contrainte `UNIQUE(account_id, provider_id)`.
+- Workflow n8n `u9NRd0JkerDhuipM` etendu avec la section cron (5 noeuds) via l'API REST n8n : Schedule 7h, HTTP Lire clients actifs, Code Build send list, If File non vide, Code Envoyer et traiter.
+- Sticky notes ajoutees dans le workflow : 3 bannieres de section + notes explicatives par noeud.
+- Bug 1 corrige : noeud "HTTP - Lire clients actifs" ne retournait rien (cles `apikey` et `Authorization Bearer` manquantes, RLS bloquait tout).
+- Bug 2 corrige : "Code - Build send list" retournait `__empty` car `$input.first().json` ne lisait que le 1er client sur 3. Remplace par `$input.all()` avec gestion des deux formats n8n (1 item tableau ou N items separes). Logs de debug ajoutes.
+- Bug 3 corrige : "Code - Envoyer et traiter" (mode `runOnceForEachItem`) retournait `[{ json: {...} }]` au lieu de `{ json: {...} }` -> erreur "A json property isn't an object". Corrige + appels PATCH/POST Supabase sans `json: true` pour eviter l'erreur de parsing sur les reponses 204.
+- Test de bout en bout partiel : Lydie Clark (rsZrC9jYS3am3poE-AZsMg) passee en `selected` manuellement -> invitation envoyee via Unipile -> `status=invited`, `sent_at` rempli en base.
+
+### Strategie scraping progressif (discutee, pas encore implementee)
+
+- Point ouvert : pour scraper 500 profils, il faut un 2e cron de scraping progressif (independant du cron d'invitations). Besoin d'une colonne `cursor` sur `lk_searches` pour la pagination Unipile. A traiter en prochaine session.
+
+---
+
+## 2026-06-22 — Migration repo GitHub
+
+- Remote git local mis a jour : `teksnocode-create/lk-kaizen` -> `geoffrey-kaizen-ia/lk-kaizen`.
+- `CLAUDE.md` mis a jour : URL du repo GitHub corrigee pour pointer vers `geoffrey-kaizen-ia`.
+
 ---
 
 ## 2026-06-19 (suite 3 — doc Unipile search + fix exclude_industry)

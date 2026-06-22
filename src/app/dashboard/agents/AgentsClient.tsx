@@ -11,10 +11,17 @@ import {
   toggleRoleEnabled,
   updateIcebreakerConfig,
   toggleIcebreakerEnabled,
+  createRelance,
+  updateRelance,
 } from "./actions";
 
 const IB_VARIABLES = [
   { label: "{{first_name}}", desc: "Prenom" },
+];
+
+const RELANCE_VARS = [
+  { label: "{{first_name}}", desc: "Prenom" },
+  { label: "{{last_name}}", desc: "Nom" },
 ];
 import AgentWizard from "./AgentWizard";
 import TestAgentModal from "./TestAgentModal";
@@ -33,6 +40,14 @@ type Assignment = {
   role: string;
   agent_id: string;
   is_enabled: boolean;
+};
+
+type Relance = {
+  id: string;
+  position: number;
+  content: string;
+  delay_days: number;
+  is_active: boolean;
 };
 
 
@@ -156,7 +171,6 @@ const AGENT_TYPE_ICON: Record<string, { label: string; iconColor: string; icon: 
 const AGENT_TYPE_OPTIONS: { value: string; label: string }[] = [
   { value: "conversation", label: "Conversation" },
   { value: "icebreaker", label: "Icebreaker (premier message)" },
-  { value: "relance", label: "Relance (message fixe)" },
 ];
 
 export default function AgentsClient({
@@ -167,6 +181,7 @@ export default function AgentsClient({
   icebreakerMode,
   icebreakerTemplate,
   icebreakerEnabled,
+  relances,
 }: {
   agents: Agent[];
   assignments: Assignment[];
@@ -175,6 +190,7 @@ export default function AgentsClient({
   icebreakerMode: "ai" | "template";
   icebreakerTemplate: string;
   icebreakerEnabled: boolean;
+  relances: Relance[];
 }) {
   const [modalOpen, setModalOpen] = useState(false);
   const [wizardOpen, setWizardOpen] = useState(false);
@@ -430,8 +446,8 @@ export default function AgentsClient({
         <p className="mb-4 text-sm text-text-muted">
           Choisit quel agent joue chaque role dans ta sequence de prospection.
         </p>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          {ROLES.map(({ key, label, iconColor, icon }) => {
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          {ROLES.filter((r) => r.key !== "relance").map(({ key, label, iconColor, icon }) => {
             const isAllowed = allowedRoles.includes(key);
 
             // Icebreaker : radio list vertical dans la card, Message fixe s'ouvre en accordeon
@@ -638,15 +654,6 @@ export default function AgentsClient({
                         </option>
                       ))}
                     </select>
-                    {key === "relance" && (
-                      <button
-                        type="button"
-                        onClick={openCreateRelance}
-                        className="w-full rounded-md border border-dashed border-border-strong px-2.5 py-1.5 text-xs text-text-muted transition-colors hover:border-accent/40 hover:text-accent"
-                      >
-                        + Creer une relance
-                      </button>
-                    )}
                   </div>
                 ) : (
                   <p className="text-xs text-text-dim">Non inclus dans votre forfait actuel.</p>
@@ -654,6 +661,35 @@ export default function AgentsClient({
               </div>
             );
           })}
+        </div>
+      </section>
+
+      {/* Relances automatiques */}
+      <section className="mb-8">
+        <div className="mb-1 flex items-center justify-between">
+          <h2 className="font-display text-xs font-semibold uppercase tracking-[0.2em] text-text-muted">
+            Relances automatiques
+          </h2>
+          {!allowedRoles.includes("relance") && (
+            <span className="rounded border border-border-strong px-1.5 py-0.5 font-display text-[9px] font-medium uppercase tracking-wider text-text-dim">
+              Forfait
+            </span>
+          )}
+        </div>
+        <p className="mb-4 text-sm text-text-muted">
+          Messages envoyes automatiquement si un prospect ne repond pas, dans l&apos;ordre de la sequence.
+        </p>
+        <div className={`grid grid-cols-1 gap-4 sm:grid-cols-2 ${!allowedRoles.includes("relance") ? "pointer-events-none opacity-50" : ""}`}>
+          <RelanceCard
+            position={1}
+            relance={relances.find((r) => r.position === 1)}
+            canCreate={true}
+          />
+          <RelanceCard
+            position={2}
+            relance={relances.find((r) => r.position === 2)}
+            canCreate={!!relances.find((r) => r.position === 1)}
+          />
         </div>
       </section>
 
@@ -787,6 +823,7 @@ export default function AgentsClient({
               onCreate={handleWizardCreate}
               isPending={isPending}
               canEditPrompt={canEditPrompt}
+              allowedRoles={allowedRoles}
             />
           </div>
         </div>
@@ -1008,6 +1045,162 @@ export default function AgentsClient({
             placeholder="Le prompt complet de l'agent..."
             autoFocus
           />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function RelanceCard({
+  position,
+  relance,
+  canCreate,
+}: {
+  position: 1 | 2;
+  relance: Relance | undefined;
+  canCreate: boolean;
+}) {
+  const [content, setContent] = useState(relance?.content ?? "");
+  const [delayDays, setDelayDays] = useState(relance?.delay_days ?? 3);
+  const [isActive, setIsActive] = useState(relance?.is_active ?? true);
+  const [dirty, setDirty] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  function insertVar(v: string) {
+    const el = textareaRef.current;
+    if (!el) return;
+    const start = el.selectionStart;
+    const end = el.selectionEnd;
+    const next = content.slice(0, start) + v + content.slice(end);
+    setContent(next);
+    setDirty(true);
+    requestAnimationFrame(() => {
+      el.focus();
+      el.setSelectionRange(start + v.length, start + v.length);
+    });
+  }
+
+  function handleSave() {
+    if (!relance) return;
+    setError(null);
+    startTransition(async () => {
+      const res = await updateRelance(relance.id, { content, delay_days: delayDays });
+      if (res.error) setError(res.error);
+      else setDirty(false);
+    });
+  }
+
+  function handleToggle() {
+    if (!relance) return;
+    const next = !isActive;
+    setIsActive(next);
+    startTransition(async () => {
+      await updateRelance(relance.id, { is_active: next });
+    });
+  }
+
+  function handleCreate() {
+    startTransition(async () => {
+      await createRelance();
+    });
+  }
+
+  return (
+    <div className="rounded-lg border border-border bg-panel p-4">
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <svg className="h-5 w-5 text-warning" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+          <p className="text-sm font-semibold text-foreground">Relance {position}</p>
+        </div>
+        {relance && (
+          <button
+            type="button"
+            onClick={handleToggle}
+            disabled={isPending}
+            title={isActive ? "Desactiver" : "Activer"}
+            className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors focus:outline-none disabled:opacity-40 ${
+              isActive ? "bg-accent" : "bg-border-strong"
+            }`}
+          >
+            <span
+              className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-sm transition-transform ${
+                isActive ? "translate-x-4" : "translate-x-0"
+              }`}
+            />
+          </button>
+        )}
+      </div>
+
+      {!relance ? (
+        <div className="flex flex-col items-center justify-center py-6">
+          {canCreate ? (
+            <button
+              type="button"
+              onClick={handleCreate}
+              disabled={isPending}
+              className="rounded-md border border-dashed border-border-strong px-4 py-2 text-xs text-text-muted transition-colors hover:border-accent/40 hover:text-accent disabled:opacity-50"
+            >
+              {isPending ? "Creation..." : "+ Configurer cette relance"}
+            </button>
+          ) : (
+            <p className="text-xs text-text-dim">Configurez d&apos;abord la Relance 1</p>
+          )}
+        </div>
+      ) : (
+        <div className="space-y-2.5">
+          <div className="flex flex-wrap gap-1">
+            {RELANCE_VARS.map((v) => (
+              <button
+                key={v.label}
+                type="button"
+                onClick={() => insertVar(v.label)}
+                title={v.desc}
+                className="rounded border border-accent/30 bg-accent/10 px-1.5 py-0.5 font-mono text-[10px] text-accent hover:bg-accent/20"
+              >
+                + {v.label}
+              </button>
+            ))}
+          </div>
+          <textarea
+            ref={textareaRef}
+            value={content}
+            onChange={(e) => { setContent(e.target.value); setDirty(true); }}
+            rows={3}
+            placeholder="Bonjour {{first_name}}, je reviens vers toi..."
+            className="w-full resize-none rounded-md border border-border-strong bg-panel-raised px-2.5 py-2 text-xs text-foreground placeholder:text-text-dim focus:border-accent/50 focus:outline-none"
+          />
+          <div className="flex items-center gap-2 text-xs text-text-muted">
+            <span>Envoyer apres</span>
+            <input
+              type="number"
+              min={1}
+              max={60}
+              value={delayDays}
+              onChange={(e) => {
+                setDelayDays(Math.max(1, parseInt(e.target.value) || 1));
+                setDirty(true);
+              }}
+              className="w-12 rounded-md border border-border-strong bg-panel-raised px-2 py-1 text-center text-xs text-foreground focus:border-accent/50 focus:outline-none"
+            />
+            <span>jours sans reponse</span>
+          </div>
+          {error && <p className="text-xs text-danger">{error}</p>}
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={isPending || !dirty}
+            className={`w-full rounded-md border py-1.5 text-xs font-medium transition-colors disabled:opacity-50 ${
+              dirty
+                ? "border-warning/40 bg-warning/10 text-warning hover:bg-warning/20"
+                : "border-border-strong text-text-muted"
+            }`}
+          >
+            {isPending ? "Enregistrement..." : dirty ? "Enregistrer les modifications" : "Enregistre"}
+          </button>
         </div>
       )}
     </div>

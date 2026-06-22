@@ -9,7 +9,8 @@ export default async function ConversationsPage() {
       .from("lk_prospects")
       .select(
         "id, full_name, status, message_count, created_at, ai_enabled, linkedin_url, occupation"
-      ),
+      )
+      .gt("message_count", 0),
     supabase
       .from("lk_messages")
       .select("prospect_id, content, sent_at, direction")

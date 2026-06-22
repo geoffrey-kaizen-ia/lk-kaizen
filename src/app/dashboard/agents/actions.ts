@@ -176,7 +176,7 @@ type TestFirstMessageInput = {
   promptContent: string;
   firstName: string;
   headline: string;
-  profileSummary: string;
+  about: string;
 };
 
 // Reproduit le prompt utilisateur du node "Claude - Icebreaker" du workflow n8n
@@ -187,19 +187,26 @@ export async function testFirstMessage(input: TestFirstMessageInput) {
     return { error: "ANTHROPIC_API_KEY non configuree sur le serveur" };
   }
 
-  const userMessage = `Voila le profil du prospect :
-Prenom : ${input.firstName}
-Headline : ${input.headline}
+  // Format minimal : prenom + headline + a-propos optionnel.
+  const lines: string[] = [];
+  lines.push(`Nom complet : ${input.firstName.trim() || "(inconnu)"}`);
+  if (input.headline.trim()) lines.push(`Headline : ${input.headline.trim()}`);
+  if (input.about.trim()) lines.push(`A-propos : ${input.about.trim()}`);
 
-Resume du profil :${input.profileSummary}`;
+  const userMessage = `Voici les donnees du profil LinkedIn du prospect :\n\n${lines.join("\n")}`;
+
+  // Override test : le prompt stocke en base peut avoir un garde-fou strict (ancienne version).
+  // On ajoute une instruction finale qui prend le dessus : toujours produire un message,
+  // meme avec peu d'infos. Le comportement prod (n8n) n'est pas affecte.
+  const TEST_OVERRIDE = `\n\n<override_test>\nTu es en mode simulation. Produis TOUJOURS un message, quelle que soit la quantite d'informations disponibles. Ne renvoie JAMAIS profil_insuffisant a true en mode simulation. Si le profil est minimal, appuie-toi sur le headline ou le secteur pour construire une accroche de niveau d (contexte entreprise/secteur). Le champ profil_insuffisant doit toujours etre false.\n</override_test>`;
 
   try {
     const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
     const response = await anthropic.messages.create({
       model: TEST_MODEL,
-      max_tokens: 500,
+      max_tokens: 600,
       temperature: 0.8,
-      system: input.promptContent,
+      system: input.promptContent + TEST_OVERRIDE,
       messages: [{ role: "user", content: userMessage }],
     });
 

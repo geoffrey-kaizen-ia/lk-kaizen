@@ -1,14 +1,28 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import {
-  launchSearch,
-  toggleResultSelection,
-  sendSelectedInvitations,
+  createCampaign,
+  archiveCampaign,
+  deleteCampaign,
+  updateCampaignStatus,
+  addToQueue,
+  removeFromQueue,
   ignoreResult,
   ignoreSelectedIds,
-  setSelectionForIds,
 } from "./actions";
+
+type Campaign = {
+  id: string;
+  name: string | null;
+  status: string;
+  total_scraped: number;
+  target_count: number;
+  mode: string;
+  created_at: string;
+  query_params: Record<string, unknown> | null;
+};
 
 type SearchResult = {
   id: string;
@@ -23,410 +37,870 @@ type SearchResult = {
   created_at: string;
 };
 
-const STATUS_LABELS: Record<string, { label: string; className: string }> = {
-  pending: { label: "A valider", className: "text-text-muted" },
-  selected: { label: "Selectionne", className: "text-accent" },
-  invited: { label: "Invitation envoyee", className: "text-positive" },
-  ignored: { label: "Ignore", className: "text-text-dim" },
+const CAMPAIGN_STATUS: Record<string, { label: string; dot: string }> = {
+  active:   { label: "En cours", dot: "bg-positive" },
+  paused:   { label: "En pause", dot: "bg-text-dim" },
+  done:     { label: "Terminé",  dot: "bg-accent" },
+  archived: { label: "Archivé",  dot: "bg-text-dim opacity-50" },
 };
 
-export default function ProspectsClient({ results }: { results: SearchResult[] }) {
-  const [isPending, startTransition] = useTransition();
-  const [searchError, setSearchError] = useState<string | null>(null);
-  const [searchLaunched, setSearchLaunched] = useState(false);
-  const [actionError, setActionError] = useState<string | null>(null);
-  const [maxResults, setMaxResults] = useState("");
-  const maxResultsError =
-    maxResults !== "" && (Number(maxResults) < 1 || Number(maxResults) > 50);
+function getQueueTiming(position: number, remainingToday: number): string {
+  return position < remainingToday ? "En cours" : "Prochaine session";
+}
 
-  // Statuts geres en etat local pour que les lignes ne se reordonnent jamais.
-  // Initialise depuis les props (rechargees seulement au prochain chargement de page).
-  const [statuses, setStatuses] = useState<Record<string, string>>(() =>
-    Object.fromEntries(results.map((r) => [r.id, r.status]))
+function CampaignFilter({
+  campaigns,
+  value,
+  onChange,
+}: {
+  campaigns: Campaign[];
+  value: string | null;
+  onChange: (id: string | null) => void;
+}) {
+  if (campaigns.length <= 1) return null;
+  return (
+    <select
+      value={value ?? ""}
+      onChange={(e) => onChange(e.target.value || null)}
+      className="rounded-md border border-border bg-panel-raised px-2 py-1 text-xs text-text-muted outline-none focus:border-accent/50"
+    >
+      <option value="">Toutes les campagnes</option>
+      {campaigns.map((c) => (
+        <option key={c.id} value={c.id}>{c.name ?? "Sans nom"}</option>
+      ))}
+    </select>
+  );
+}
+
+export default function ProspectsClient({
+  campaigns,
+  pendingResults,
+  selectedResults,
+  invitedResults,
+  invitesToday,
+  dailyInviteLimit,
+  messagesToday,
+  dailyMessageLimit,
+}: {
+  campaigns: Campaign[];
+  pendingResults: SearchResult[];
+  selectedResults: SearchResult[];
+  invitedResults: SearchResult[];
+  invitesToday: number;
+  dailyInviteLimit: number;
+  messagesToday: number;
+  dailyMessageLimit: number;
+}) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+
+  const [showModal, setShowModal] = useState(false);
+  const [prefillData, setPrefillData] = useState<Campaign | null>(null);
+  const [detailCampaign, setDetailCampaign] = useState<Campaign | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  // Filtres indépendants par section
+  const [filterPending, setFilterPending] = useState<string | null>(null);
+  const [filterQueue, setFilterQueue] = useState<string | null>(null);
+  const [filterInvited, setFilterInvited] = useState<string | null>(null);
+
+  // Accordéons
+  const [openQueue, setOpenQueue] = useState(true);
+  const [openPending, setOpenPending] = useState(true);
+  const [openInvited, setOpenInvited] = useState(false);
+
+  const [campaignStatuses, setCampaignStatuses] = useState<Record<string, string>>(
+    () => Object.fromEntries(campaigns.map((c) => [c.id, c.status]))
   );
 
-  function handleSearch(formData: FormData) {
-    setSearchError(null);
-    setSearchLaunched(false);
-    if (maxResultsError) {
-      setSearchError("Choisis un nombre de profils entre 1 et 50.");
-      return;
+  const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
+  const [hiddenPending, setHiddenPending] = useState<Set<string>>(new Set());
+  const [hiddenSelected, setHiddenSelected] = useState<Set<string>>(new Set());
+
+  const campaignById = new Map(campaigns.map((c) => [c.id, c]));
+
+  // Compteurs réels par campagne (depuis les résultats, pas total_scraped)
+  const countByCampaign = (results: SearchResult[], hidden: Set<string>) => {
+    const map: Record<string, number> = {};
+    for (const r of results) {
+      if (!hidden.has(r.id)) map[r.search_id] = (map[r.search_id] ?? 0) + 1;
     }
+    return map;
+  };
+
+  const pendingCountByCampaign  = countByCampaign(pendingResults, hiddenPending);
+  const selectedCountByCampaign = countByCampaign(selectedResults, hiddenSelected);
+  const invitedCountByCampaign  = countByCampaign(invitedResults, new Set());
+
+  // Compteur scrapé réel = pending + selected + invited
+  const actualScrapedByCampaign: Record<string, number> = {};
+  for (const [id, n] of Object.entries(pendingCountByCampaign))  actualScrapedByCampaign[id] = (actualScrapedByCampaign[id] ?? 0) + n;
+  for (const [id, n] of Object.entries(selectedCountByCampaign)) actualScrapedByCampaign[id] = (actualScrapedByCampaign[id] ?? 0) + n;
+  for (const [id, n] of Object.entries(invitedCountByCampaign))  actualScrapedByCampaign[id] = (actualScrapedByCampaign[id] ?? 0) + n;
+
+  const visiblePending  = pendingResults.filter((r) => !hiddenPending.has(r.id) && (!filterPending || r.search_id === filterPending));
+  const visibleSelected = selectedResults.filter((r) => !hiddenSelected.has(r.id) && (!filterQueue || r.search_id === filterQueue));
+  const visibleInvited  = invitedResults.filter((r) => !filterInvited || r.search_id === filterInvited);
+
+  const pendingByCampaign = new Map<string, SearchResult[]>();
+  for (const r of visiblePending) {
+    const list = pendingByCampaign.get(r.search_id) ?? [];
+    list.push(r);
+    pendingByCampaign.set(r.search_id, list);
+  }
+
+  const remainingToday = Math.max(0, dailyInviteLimit - invitesToday);
+  const invitesPct = Math.min(100, Math.round((invitesToday / dailyInviteLimit) * 100));
+  const msgPct = Math.min(100, Math.round((messagesToday / dailyMessageLimit) * 100));
+  const checkedCount = checkedIds.size;
+
+  const queueSummary = (() => {
+    if (visibleSelected.length === 0) return "Vide · aucune invitation planifiée";
+    if (visibleSelected.length <= remainingToday) return `${visibleSelected.length} en cours · prochaine session`;
+    const sessions = Math.ceil((visibleSelected.length - remainingToday) / dailyInviteLimit) + 1;
+    return `${remainingToday} en cours · ${visibleSelected.length - remainingToday} sur ${sessions} sessions suivantes`;
+  })();
+
+  // ── Handlers ─────────────────────────────────────────────────────────────
+
+  function handleCreateCampaign(formData: FormData) {
+    setFormError(null);
     startTransition(async () => {
-      const result = await launchSearch(formData);
-      if (result.error) {
-        setSearchError(result.error);
-      } else {
-        setSearchLaunched(true);
+      const res = await createCampaign(formData);
+      if (res.error) setFormError(res.error);
+      else setShowModal(false);
+    });
+  }
+
+  function handleToggleCampaignStatus(id: string, current: string) {
+    const next = current === "active" ? "paused" : "active";
+    setCampaignStatuses((prev) => ({ ...prev, [id]: next }));
+    startTransition(async () => {
+      const res = await updateCampaignStatus(id, next as "active" | "paused");
+      if (res.error) {
+        setCampaignStatuses((prev) => ({ ...prev, [id]: current }));
+        setActionError(res.error);
       }
     });
   }
 
-  function handleToggle(id: string, selected: boolean) {
+  function handleDuplicate(c: Campaign) {
+    setPrefillData(c);
+    setDetailCampaign(null);
+    setShowModal(true);
+    setFormError(null);
+  }
+
+  function handleArchive(id: string) {
+    setDetailCampaign(null);
     setActionError(null);
-    // Mise a jour optimiste locale : la ligne reste en place.
-    setStatuses((prev) => ({ ...prev, [id]: selected ? "selected" : "pending" }));
     startTransition(async () => {
-      const result = await toggleResultSelection(id, selected);
-      if (result.error) setActionError(result.error);
+      const res = await archiveCampaign(id);
+      if (res.error) setActionError(res.error);
     });
   }
 
-  function handleToggleAll(ids: string[], selected: boolean) {
+  function handleDeleteCampaign(id: string) {
+    setConfirmDeleteId(null);
     setActionError(null);
-    setStatuses((prev) => {
-      const next = { ...prev };
-      for (const id of ids) next[id] = selected ? "selected" : "pending";
-      return next;
-    });
     startTransition(async () => {
-      const result = await setSelectionForIds(ids, selected);
-      if (result.error) setActionError(result.error);
+      const res = await deleteCampaign(id);
+      if (res.error) setActionError(res.error);
+      else if (detailCampaign?.id === id) setDetailCampaign(null);
     });
   }
 
-  function handleSendInvitations(searchId: string) {
+  function handleCheck(id: string, checked: boolean) {
+    setCheckedIds((prev) => { const n = new Set(prev); if (checked) n.add(id); else n.delete(id); return n; });
+  }
+
+  function handleCheckAll(ids: string[], checked: boolean) {
+    setCheckedIds((prev) => {
+      const n = new Set(prev);
+      for (const id of ids) { if (checked) n.add(id); else n.delete(id); }
+      return n;
+    });
+  }
+
+  function handleAddToQueue() {
+    const ids = [...checkedIds];
+    if (ids.length === 0) return;
     setActionError(null);
+    setHiddenPending((prev) => new Set([...prev, ...ids]));
+    setCheckedIds(new Set());
     startTransition(async () => {
-      const result = await sendSelectedInvitations(searchId);
-      if (result.error) setActionError(result.error);
+      const res = await addToQueue(ids);
+      if (res.error) {
+        setHiddenPending((prev) => { const n = new Set(prev); ids.forEach(id => n.delete(id)); return n; });
+        setActionError(res.error);
+      }
+    });
+  }
+
+  function handleRemoveFromQueue(ids: string[]) {
+    setActionError(null);
+    setHiddenSelected((prev) => new Set([...prev, ...ids]));
+    startTransition(async () => {
+      const res = await removeFromQueue(ids);
+      if (res.error) {
+        setHiddenSelected((prev) => { const n = new Set(prev); ids.forEach(id => n.delete(id)); return n; });
+        setActionError(res.error);
+      }
     });
   }
 
   function handleIgnore(id: string) {
     setActionError(null);
-    setStatuses((prev) => ({ ...prev, [id]: "ignored" }));
+    setHiddenPending((prev) => new Set([...prev, id]));
+    setCheckedIds((prev) => { const n = new Set(prev); n.delete(id); return n; });
     startTransition(async () => {
-      const result = await ignoreResult(id);
-      if (result.error) setActionError(result.error);
+      const res = await ignoreResult(id);
+      if (res.error) {
+        setHiddenPending((prev) => { const n = new Set(prev); n.delete(id); return n; });
+        setActionError(res.error);
+      }
     });
   }
 
-  function handleIgnoreSelected(ids: string[]) {
+  function handleIgnoreChecked() {
+    const ids = [...checkedIds];
+    if (ids.length === 0) return;
     setActionError(null);
-    setStatuses((prev) => {
-      const next = { ...prev };
-      for (const id of ids) next[id] = "ignored";
-      return next;
-    });
+    setHiddenPending((prev) => new Set([...prev, ...ids]));
+    setCheckedIds(new Set());
     startTransition(async () => {
-      const result = await ignoreSelectedIds(ids);
-      if (result.error) setActionError(result.error);
+      const res = await ignoreSelectedIds(ids);
+      if (res.error) {
+        setHiddenPending((prev) => { const n = new Set(prev); ids.forEach(id => n.delete(id)); return n; });
+        setActionError(res.error);
+      }
     });
-  }
-
-  // Groupe les resultats par recherche, du plus recent au plus ancien.
-  // L'ordre des lignes vient des props et ne change jamais (le statut vit dans l'etat local).
-  const bySearch = new Map<string, SearchResult[]>();
-  for (const r of results) {
-    const list = bySearch.get(r.search_id) ?? [];
-    list.push(r);
-    bySearch.set(r.search_id, list);
   }
 
   return (
     <div className="space-y-6">
-      {/* Formulaire de recherche */}
-      <section className="rounded-md border border-border bg-panel p-5">
-        <h2 className="font-display text-sm font-semibold uppercase tracking-widest text-text-muted">
-          Nouvelle recherche
-        </h2>
-        <p className="mt-1 text-xs text-text-dim">
-          Recherche des profils LinkedIn correspondant a tes criteres. Maximum 50
-          resultats par recherche. Les champs marques d&apos;un{" "}
-          <span className="text-danger">*</span> sont obligatoires.
-        </p>
 
-        <form action={handleSearch} className="mt-4 space-y-4">
-          <div>
-            <label className="mb-1.5 block text-xs font-medium text-text-muted">
-              Qui cherches-tu ? <span className="text-danger">*</span>
-            </label>
-            <input
-              type="text"
-              name="keywords"
-              required
-              placeholder="directeur marketing"
-              className="w-full rounded-md border border-border bg-panel-raised px-3 py-2 text-sm text-foreground outline-none focus:border-accent/50"
-            />
-            <p className="mt-1 text-xs text-text-dim">
-              Le metier ou le poste des personnes que tu veux contacter.
-            </p>
+      {/* ── Quotas du jour ─────────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 overflow-hidden rounded-lg border border-border bg-border gap-px">
+        <div className="bg-panel p-4">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-xs font-medium text-text-muted">Invitations aujourd&apos;hui</span>
+            <span className="text-sm font-semibold text-foreground">{invitesToday} / {dailyInviteLimit}</span>
           </div>
+          <div className="h-1.5 rounded-full bg-panel-raised">
+            <div
+              className={`h-1.5 rounded-full transition-all ${invitesPct >= 100 ? "bg-warning" : "bg-accent"}`}
+              style={{ width: `${invitesPct}%` }}
+            />
+          </div>
+          <p className="mt-1.5 text-xs text-text-dim">
+            {remainingToday > 0
+              ? `${remainingToday} restante${remainingToday > 1 ? "s" : ""} aujourd'hui`
+              : "Quota atteint pour aujourd'hui"}
+          </p>
+        </div>
+        <div className="bg-panel p-4">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-xs font-medium text-text-muted">Messages aujourd&apos;hui</span>
+            <span className="text-sm font-semibold text-foreground">{messagesToday} / {dailyMessageLimit}</span>
+          </div>
+          <div className="h-1.5 rounded-full bg-panel-raised">
+            <div
+              className={`h-1.5 rounded-full transition-all ${msgPct >= 100 ? "bg-warning" : "bg-accent"}`}
+              style={{ width: `${msgPct}%` }}
+            />
+          </div>
+          <p className="mt-1.5 text-xs text-text-dim">
+            {msgPct >= 100 ? "Quota atteint pour aujourd'hui" : `${dailyMessageLimit - messagesToday} restant${dailyMessageLimit - messagesToday > 1 ? "s" : ""} aujourd'hui`}
+          </p>
+        </div>
+      </div>
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <div>
-              <label className="mb-1.5 block text-xs font-medium text-text-muted">
-                Ou se trouvent-elles ?
-              </label>
-              <input
-                type="text"
-                name="location"
-                placeholder="Paris"
-                className="w-full rounded-md border border-border bg-panel-raised px-3 py-2 text-sm text-foreground outline-none focus:border-accent/50"
-              />
-              <p className="mt-1 text-xs text-text-dim">
-                Ville, region ou pays. Laisse vide pour ne pas filtrer.
-              </p>
-            </div>
+      {/* ── Campagnes ──────────────────────────────────────────────────── */}
+      <section>
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="font-display text-sm font-semibold uppercase tracking-widest text-text-muted">
+            Campagnes
+          </h2>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => startTransition(() => { router.refresh(); })}
+              disabled={isPending}
+              className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-text-muted transition-colors hover:bg-panel-raised disabled:opacity-50"
+            >
+              {isPending ? "..." : "Rafraîchir"}
+            </button>
+            <button
+              type="button"
+              onClick={() => { setShowModal(true); setFormError(null); }}
+              className="rounded-md border border-accent/30 bg-accent/10 px-3 py-1.5 text-xs font-medium text-accent transition-colors hover:bg-accent/20"
+            >
+              + Nouvelle campagne
+            </button>
+          </div>
+        </div>
 
-            <div>
-              <label className="mb-1.5 block text-xs font-medium text-text-muted">
-                Quel niveau de relation ?
-              </label>
-              <select
-                name="network_distance"
-                className="w-full rounded-md border border-border bg-panel-raised px-3 py-2 text-sm text-foreground outline-none focus:border-accent/50"
+        {campaigns.length === 0 && (
+          <p className="rounded-md border border-border bg-panel px-5 py-8 text-center text-sm text-text-dim">
+            Aucune campagne. Crée-en une pour commencer.
+          </p>
+        )}
+
+        <div className="space-y-2">
+          {campaigns.filter((c) => c.status !== "archived").map((c) => {
+            const statusKey = campaignStatuses[c.id] ?? c.status;
+            const statusInfo = CAMPAIGN_STATUS[statusKey] ?? CAMPAIGN_STATUS.active;
+            const actualScraped = actualScrapedByCampaign[c.id] ?? 0;
+            const pct = c.target_count > 0 ? Math.min(100, Math.round((actualScraped / c.target_count) * 100)) : 0;
+            const isDone = statusKey === "done";
+            const nPending  = pendingCountByCampaign[c.id]  ?? 0;
+            const nSelected = selectedCountByCampaign[c.id] ?? 0;
+            const nInvited  = invitedCountByCampaign[c.id]  ?? 0;
+
+            return (
+              <div
+                key={c.id}
+                onClick={() => setDetailCampaign(c)}
+                className="flex cursor-pointer items-center gap-3 rounded-md border border-border bg-panel px-4 py-3 transition-colors hover:border-accent/30"
               >
-                <option value="">Tout le monde</option>
-                <option value="1">Mes contacts</option>
-                <option value="2">Contacts de mes contacts</option>
-                <option value="3">Inconnus (3e degre et +)</option>
-              </select>
-              <p className="mt-1 text-xs text-text-dim">
-                A quelle distance de toi sur LinkedIn doivent etre les profils.
-              </p>
-            </div>
+                <span className={`h-2 w-2 shrink-0 rounded-full ${statusInfo.dot}`} />
+                <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
+                  {c.name ?? "Sans nom"}
+                </span>
 
-            <div>
-              <label className="mb-1.5 block text-xs font-medium text-text-muted">
-                Combien de profils ?
-              </label>
-              <input
-                type="number"
-                name="max_results"
-                min={1}
-                max={50}
-                value={maxResults}
-                onChange={(e) => setMaxResults(e.target.value)}
-                placeholder="50"
-                aria-invalid={maxResultsError}
-                className={`w-full rounded-md border bg-panel-raised px-3 py-2 text-sm text-foreground outline-none focus:border-accent/50 ${
-                  maxResultsError ? "border-danger" : "border-border"
-                }`}
-              />
-              {maxResultsError ? (
-                <p className="mt-1 text-xs text-danger">
-                  Choisis un nombre entre 1 et 50.
-                </p>
-              ) : (
-                <p className="mt-1 text-xs text-text-dim">
-                  Laisse vide pour 50 profils (le maximum).
-                </p>
-              )}
-            </div>
-          </div>
+                <div className="hidden items-center gap-2 sm:flex">
+                  <div className="h-1.5 w-20 rounded-full bg-panel-raised">
+                    <div className="h-1.5 rounded-full bg-accent transition-all" style={{ width: `${pct}%` }} />
+                  </div>
+                  <span className="whitespace-nowrap text-xs text-text-dim">
+                    {actualScraped}/{c.target_count}
+                  </span>
+                </div>
 
-          <div>
-            <label className="mb-1.5 block text-xs font-medium text-text-muted">
-              Dans quel secteur ?
-            </label>
-            <input
-              type="text"
-              name="industry"
-              placeholder="Logiciels"
-              className="w-full rounded-md border border-border bg-panel-raised px-3 py-2 text-sm text-foreground outline-none focus:border-accent/50"
-            />
-            <p className="mt-1 text-xs text-text-dim">
-              Le secteur d&apos;activite des entreprises visees. Optionnel.
-            </p>
-          </div>
+                <div className="hidden items-center gap-3 text-xs sm:flex">
+                  {nPending > 0  && <span className="text-text-muted">{nPending} à valider</span>}
+                  {nSelected > 0 && <span className="text-accent">{nSelected} en file</span>}
+                  {nInvited > 0  && <span className="text-positive">{nInvited} invité{nInvited > 1 ? "s" : ""}</span>}
+                  {nPending === 0 && nSelected === 0 && nInvited === 0 && (
+                    <span className="text-text-dim">Aucun profil encore</span>
+                  )}
+                </div>
 
-          <div>
-            <label className="mb-1.5 block text-xs font-medium text-text-muted">
-              Postes a eviter
-            </label>
-            <input
-              type="text"
-              name="exclude_titles"
-              placeholder="stagiaire, freelance, etudiant"
-              className="w-full rounded-md border border-border bg-panel-raised px-3 py-2 text-sm text-foreground outline-none focus:border-accent/50"
-            />
-            <p className="mt-1 text-xs text-text-dim">
-              Liste de mots separes par des virgules. Les profils dont le poste
-              contient un de ces mots seront ecartes automatiquement.
-            </p>
-          </div>
+                <span className="shrink-0 rounded-sm bg-panel-raised px-1.5 py-0.5 text-xs text-text-dim">
+                  {c.mode === "auto" ? "Auto" : "Manuel"}
+                </span>
 
-          <label className="flex items-start gap-3 rounded-md border border-border bg-panel-raised px-3 py-2.5">
-            <input type="checkbox" name="auto_invite" className="mt-0.5" />
-            <div>
-              <span className="text-sm font-medium text-foreground">
-                Envoi automatique des invitations
-              </span>
-              <p className="text-xs text-text-dim">
-                Si active, les invitations sont envoyees directement aux profils
-                trouves. Sinon, tu valides la liste avant l&apos;envoi.
-              </p>
-            </div>
-          </label>
+                {!isDone && (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); handleToggleCampaignStatus(c.id, statusKey); }}
+                    disabled={isPending}
+                    className="shrink-0 text-xs text-text-dim transition-colors hover:text-text-muted disabled:opacity-50"
+                  >
+                    {statusKey === "active" ? "Pause" : "Reprendre"}
+                  </button>
+                )}
 
-          {searchError && <p className="text-sm text-danger">{searchError}</p>}
-          {searchLaunched && !searchError && (
-            <p className="text-sm text-positive">
-              Recherche lancee. Reviens dans quelques minutes pour voir les profils.
-            </p>
-          )}
-
-          <button
-            type="submit"
-            disabled={isPending}
-            className="rounded-md border border-accent/30 bg-accent/10 px-4 py-2 text-sm font-medium text-accent transition-colors hover:bg-accent/20 disabled:opacity-50"
-          >
-            {isPending ? "Lancement..." : "Lancer la recherche"}
-          </button>
-        </form>
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(c.id); }}
+                  disabled={isPending}
+                  title="Supprimer"
+                  className="shrink-0 text-text-dim transition-colors hover:text-danger disabled:opacity-50"
+                >
+                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                </button>
+              </div>
+            );
+          })}
+        </div>
       </section>
 
       {actionError && <p className="text-sm text-danger">{actionError}</p>}
 
-      {/* Resultats par recherche */}
-      {bySearch.size === 0 && (
-        <p className="text-sm text-text-dim">
-          Aucun resultat pour le moment. Lance une recherche ci-dessus.
-        </p>
+      {/* ── File d'attente ─────────────────────────────────────────────── */}
+      {selectedResults.length > 0 && (
+        <section>
+          <div className="mb-3 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setOpenQueue((v) => !v)}
+                className="flex items-center gap-2 group"
+              >
+                <svg className={`h-3.5 w-3.5 text-text-dim transition-transform ${openQueue ? "rotate-90" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                </svg>
+                <h2 className="font-display text-sm font-semibold uppercase tracking-widest text-text-muted group-hover:text-foreground">
+                  File d&apos;attente ({visibleSelected.length})
+                </h2>
+              </button>
+              {openQueue && <CampaignFilter campaigns={campaigns} value={filterQueue} onChange={setFilterQueue} />}
+            </div>
+            {openQueue && (
+              <button
+                type="button"
+                onClick={() => handleRemoveFromQueue(visibleSelected.map((r) => r.id))}
+                disabled={isPending}
+                className="text-xs text-text-dim transition-colors hover:text-danger disabled:opacity-50"
+              >
+                Tout retirer
+              </button>
+            )}
+          </div>
+
+          {openQueue && <div className="overflow-hidden rounded-md border border-border bg-panel">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border bg-panel-raised">
+                  <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wide text-text-dim">Prospect</th>
+                  <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wide text-text-dim">Campagne</th>
+                  <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wide text-text-dim">Statut</th>
+                  <th className="px-4 py-2.5" />
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {visibleSelected.map((r, i) => {
+                  const timing = getQueueTiming(i, remainingToday);
+                  const campaign = campaignById.get(r.search_id);
+                  return (
+                    <tr key={r.id} className="hover:bg-panel-raised">
+                      <td className="px-4 py-3">
+                        <p className="font-medium text-foreground">{r.full_name ?? "—"}</p>
+                        {r.headline && <p className="max-w-xs truncate text-xs text-text-dim">{r.headline}</p>}
+                      </td>
+                      <td className="px-4 py-3 text-xs text-text-muted">{campaign?.name ?? "—"}</td>
+                      <td className="px-4 py-3">
+                        <span className={`text-xs font-medium ${timing === "En cours" ? "text-positive" : "text-text-dim"}`}>
+                          {timing}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveFromQueue([r.id])}
+                          disabled={isPending}
+                          className="text-xs text-text-dim transition-colors hover:text-danger disabled:opacity-50"
+                        >
+                          Retirer
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>}
+        </section>
       )}
 
-      {Array.from(bySearch.entries()).map(([searchId, items]) => {
-        // On masque localement les profils ignores sans recharger la page.
-        const visibleItems = items.filter((r) => statuses[r.id] !== "ignored");
-        if (visibleItems.length === 0) return null;
-
-        const selectedCount = visibleItems.filter(
-          (r) => statuses[r.id] === "selected"
-        ).length;
-        const invitedCount = visibleItems.filter(
-          (r) => statuses[r.id] === "invited"
-        ).length;
-        const pendingCount = visibleItems.filter(
-          (r) => statuses[r.id] === "pending"
-        ).length;
-
-        // Lignes encore cochables (a valider ou selectionnees) pour le "tout selectionner"
-        const toggleableIds = visibleItems
-          .filter((r) => statuses[r.id] === "pending" || statuses[r.id] === "selected")
-          .map((r) => r.id);
-        const allSelected =
-          toggleableIds.length > 0 &&
-          toggleableIds.every((id) => statuses[id] === "selected");
-
-        const selectedIds = visibleItems
-          .filter((r) => statuses[r.id] === "selected")
-          .map((r) => r.id);
-
-        const date = new Date(items[0].created_at).toLocaleString("fr-FR", {
-          day: "2-digit",
-          month: "2-digit",
-          hour: "2-digit",
-          minute: "2-digit",
-        });
-
-        return (
-          <section key={searchId} className="rounded-md border border-border bg-panel p-5">
-            <div className="mb-3 flex items-center justify-between">
-              <h3 className="font-display text-sm font-semibold uppercase tracking-widest text-text-muted">
-                Recherche du {date}
-              </h3>
-              {selectedCount > 0 && (
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => handleIgnoreSelected(selectedIds)}
-                    disabled={isPending}
-                    className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-text-muted transition-colors hover:bg-panel-raised hover:text-danger disabled:opacity-50"
-                  >
-                    Ignorer la selection
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleSendInvitations(searchId)}
-                    disabled={isPending}
-                    className="rounded-md border border-accent/30 bg-accent/10 px-3 py-1.5 text-xs font-medium text-accent transition-colors hover:bg-accent/20 disabled:opacity-50"
-                  >
-                    Envoyer {selectedCount} invitation{selectedCount > 1 ? "s" : ""}
-                  </button>
-                </div>
-              )}
+      {/* ── À valider ──────────────────────────────────────────────────── */}
+      {(pendingResults.length > 0 || filterPending) && (
+        <section>
+          <div className="mb-3 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setOpenPending((v) => !v)}
+                className="flex items-center gap-2 group"
+              >
+                <svg className={`h-3.5 w-3.5 text-text-dim transition-transform ${openPending ? "rotate-90" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                </svg>
+                <h2 className="font-display text-sm font-semibold uppercase tracking-widest text-text-muted group-hover:text-foreground">
+                  À valider ({visiblePending.length})
+                </h2>
+              </button>
+              {openPending && <CampaignFilter campaigns={campaigns} value={filterPending} onChange={setFilterPending} />}
             </div>
-
-            <p className="mb-3 text-xs text-text-dim">
-              {visibleItems.length} profil{visibleItems.length > 1 ? "s" : ""} trouve
-              {visibleItems.length > 1 ? "s" : ""}
-              {pendingCount > 0 && ` · ${pendingCount} a valider`}
-              {invitedCount > 0 && ` · ${invitedCount} invite${invitedCount > 1 ? "s" : ""}`}
-            </p>
-
-            {/* Tout selectionner */}
-            {toggleableIds.length > 0 && (
-              <label className="mb-2 flex items-center gap-3 rounded-md border border-border bg-panel-raised px-3 py-2">
-                <input
-                  type="checkbox"
-                  checked={allSelected}
+            {openPending && checkedCount > 0 && (
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={handleIgnoreChecked}
                   disabled={isPending}
-                  onChange={(e) => handleToggleAll(toggleableIds, e.target.checked)}
-                />
-                <span className="text-xs font-medium text-text-muted">
-                  {allSelected ? "Tout deselectionner" : "Tout selectionner"}
-                </span>
-              </label>
+                  className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-text-muted transition-colors hover:bg-panel-raised hover:text-danger disabled:opacity-50"
+                >
+                  Ignorer ({checkedCount})
+                </button>
+                <button
+                  type="button"
+                  onClick={handleAddToQueue}
+                  disabled={isPending}
+                  className="rounded-md border border-accent/30 bg-accent/10 px-3 py-1.5 text-xs font-medium text-accent transition-colors hover:bg-accent/20 disabled:opacity-50"
+                >
+                  Ajouter à la file ({checkedCount})
+                </button>
+              </div>
             )}
+          </div>
 
-            <div className="space-y-1.5">
-              {visibleItems.map((r) => {
-                const status = statuses[r.id] ?? "pending";
-                const statusInfo = STATUS_LABELS[status] ?? STATUS_LABELS.pending;
-                const canToggle = status === "pending" || status === "selected";
+          {openPending && <div className="space-y-4">
+            {Array.from(pendingByCampaign.entries()).map(([searchId, items]) => {
+              const campaign = campaignById.get(searchId);
+              const campaignCheckedIds = items.map((r) => r.id).filter((id) => checkedIds.has(id));
+              const allChecked = items.length > 0 && items.every((r) => checkedIds.has(r.id));
 
-                return (
-                  <div
-                    key={r.id}
-                    className="flex items-center gap-3 rounded-md border border-border bg-panel-raised px-3 py-2"
-                  >
+              return (
+                <div key={searchId} className="rounded-md border border-border bg-panel p-4">
+                  <div className="mb-3 flex items-center justify-between">
+                    <h3 className="text-sm font-semibold text-foreground">
+                      {campaign?.name ?? "Campagne"}
+                      <span className="ml-2 text-xs font-normal text-text-dim">
+                        {items.length} profil{items.length > 1 ? "s" : ""}
+                      </span>
+                    </h3>
+                  </div>
+
+                  <label className="mb-2 flex cursor-pointer items-center gap-3 rounded-md border border-border bg-panel-raised px-3 py-2">
                     <input
                       type="checkbox"
-                      checked={status === "selected"}
-                      disabled={!canToggle || isPending}
-                      onChange={(e) => handleToggle(r.id, e.target.checked)}
+                      checked={allChecked}
+                      disabled={isPending}
+                      onChange={(e) => handleCheckAll(items.map((r) => r.id), e.target.checked)}
                     />
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-foreground">
-                        {r.full_name ?? "Profil sans nom"}
-                      </p>
-                      <p className="truncate text-xs text-text-dim">
-                        {r.headline ?? "—"}
-                        {r.location ? ` · ${r.location}` : ""}
-                      </p>
-                      {(r.current_company || r.industry) && (
-                        <p className="truncate text-xs text-text-dim">
-                          {[r.current_company, r.industry]
-                            .filter(Boolean)
-                            .join(" · ")}
-                        </p>
-                      )}
-                    </div>
-                    <span className={`shrink-0 text-xs font-medium ${statusInfo.className}`}>
-                      {statusInfo.label}
+                    <span className="text-xs font-medium text-text-muted">
+                      {allChecked ? "Tout décocher" : "Tout sélectionner"}
                     </span>
-                    {canToggle && (
-                      <button
-                        type="button"
-                        onClick={() => handleIgnore(r.id)}
-                        disabled={isPending}
-                        title="Ignorer ce profil"
-                        className="shrink-0 rounded-md border border-transparent p-1 text-text-dim transition-colors hover:border-border hover:bg-panel hover:text-danger disabled:opacity-50"
-                      >
-                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                      </button>
+                    {campaignCheckedIds.length > 0 && !allChecked && (
+                      <span className="text-xs text-text-dim">
+                        {campaignCheckedIds.length} sélectionné{campaignCheckedIds.length > 1 ? "s" : ""}
+                      </span>
                     )}
+                  </label>
+
+                  <div className="space-y-1.5">
+                    {items.map((r) => (
+                      <div key={r.id} className="flex items-center gap-3 rounded-md border border-border bg-panel-raised px-3 py-2">
+                        <input
+                          type="checkbox"
+                          checked={checkedIds.has(r.id)}
+                          disabled={isPending}
+                          onChange={(e) => handleCheck(r.id, e.target.checked)}
+                        />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium text-foreground">{r.full_name ?? "Profil sans nom"}</p>
+                          <p className="truncate text-xs text-text-dim">
+                            {r.headline ?? "—"}{r.location ? ` · ${r.location}` : ""}
+                          </p>
+                          {(r.current_company || r.industry) && (
+                            <p className="truncate text-xs text-text-dim">
+                              {[r.current_company, r.industry].filter(Boolean).join(" · ")}
+                            </p>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleIgnore(r.id)}
+                          disabled={isPending}
+                          title="Ignorer ce profil"
+                          className="shrink-0 rounded-md border border-transparent p-1 text-text-dim transition-colors hover:border-border hover:bg-panel hover:text-danger disabled:opacity-50"
+                        >
+                          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+                    ))}
                   </div>
-                );
-              })}
+                </div>
+              );
+            })}
+
+            {visiblePending.length === 0 && (
+              <p className="rounded-md border border-border bg-panel px-5 py-6 text-center text-sm text-text-dim">
+                Aucun profil à valider{filterPending ? " pour cette campagne" : ""}.
+              </p>
+            )}
+          </div>}
+        </section>
+      )}
+
+      {/* ── Invitations envoyées ───────────────────────────────────────── */}
+      {invitedResults.length > 0 && (
+        <section>
+          <div className="mb-3 flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setOpenInvited((v) => !v)}
+              className="flex items-center gap-2 group"
+            >
+              <svg className={`h-3.5 w-3.5 text-text-dim transition-transform ${openInvited ? "rotate-90" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+              </svg>
+              <h2 className="font-display text-sm font-semibold uppercase tracking-widest text-text-muted group-hover:text-foreground">
+                Invitations envoyées ({visibleInvited.length})
+              </h2>
+            </button>
+            {openInvited && <CampaignFilter campaigns={campaigns} value={filterInvited} onChange={setFilterInvited} />}
+          </div>
+
+          {openInvited && <div className="overflow-hidden rounded-md border border-border bg-panel">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border bg-panel-raised">
+                  <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wide text-text-dim">Prospect</th>
+                  <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wide text-text-dim">Campagne</th>
+                  <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wide text-text-dim">Invité le</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {visibleInvited.map((r) => {
+                  const campaign = campaignById.get(r.search_id);
+                  return (
+                    <tr key={r.id} className="hover:bg-panel-raised">
+                      <td className="px-4 py-3">
+                        <p className="font-medium text-foreground">{r.full_name ?? "—"}</p>
+                        {r.headline && <p className="max-w-xs truncate text-xs text-text-dim">{r.headline}</p>}
+                      </td>
+                      <td className="px-4 py-3 text-xs text-text-muted">{campaign?.name ?? "—"}</td>
+                      <td className="px-4 py-3 text-xs text-text-dim">
+                        {new Date(r.created_at).toLocaleDateString("fr-FR")}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>}
+        </section>
+      )}
+
+      {/* ── Modal détail campagne ─────────────────────────────────────── */}
+      {detailCampaign && (() => {
+        const c = detailCampaign;
+        const statusKey = campaignStatuses[c.id] ?? c.status;
+        const statusInfo = CAMPAIGN_STATUS[statusKey] ?? CAMPAIGN_STATUS.active;
+        const actualScraped = actualScrapedByCampaign[c.id] ?? 0;
+        const pct = c.target_count > 0 ? Math.min(100, Math.round((actualScraped / c.target_count) * 100)) : 0;
+        const nPending  = pendingCountByCampaign[c.id]  ?? 0;
+        const nSelected = selectedCountByCampaign[c.id] ?? 0;
+        const nInvited  = invitedCountByCampaign[c.id]  ?? 0;
+        const qp = c.query_params ?? {};
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setDetailCampaign(null)}>
+            <div className="w-full max-w-md rounded-lg border border-border bg-panel p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+              <div className="mb-5 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className={`h-2 w-2 rounded-full ${statusInfo.dot}`} />
+                  <h3 className="font-display text-base font-semibold text-foreground">{c.name ?? "Sans nom"}</h3>
+                </div>
+                <button type="button" onClick={() => setDetailCampaign(null)} className="text-text-dim hover:text-foreground">
+                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <div className="mb-1.5 flex justify-between text-xs text-text-muted">
+                    <span>Profils scrapés</span>
+                    <span>{actualScraped} / {c.target_count} ({pct}%)</span>
+                  </div>
+                  <div className="h-2 rounded-full bg-panel-raised">
+                    <div className="h-2 rounded-full bg-accent transition-all" style={{ width: `${pct}%` }} />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="rounded-md border border-border bg-panel-raised p-3 text-center">
+                    <p className="text-lg font-bold text-foreground">{nPending}</p>
+                    <p className="text-xs text-text-dim">À valider</p>
+                  </div>
+                  <div className="rounded-md border border-border bg-panel-raised p-3 text-center">
+                    <p className="text-lg font-bold text-accent">{nSelected}</p>
+                    <p className="text-xs text-text-dim">En file</p>
+                  </div>
+                  <div className="rounded-md border border-border bg-panel-raised p-3 text-center">
+                    <p className="text-lg font-bold text-positive">{nInvited}</p>
+                    <p className="text-xs text-text-dim">Invités</p>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5 rounded-md border border-border bg-panel-raised px-3 py-2.5 text-xs">
+                  {!!qp.keywords    && <div className="flex justify-between"><span className="text-text-dim">Mots-clés</span><span className="font-medium text-foreground">{String(qp.keywords)}</span></div>}
+                  {!!qp.location    && <div className="flex justify-between"><span className="text-text-dim">Localisation</span><span className="font-medium text-foreground">{String(qp.location)}</span></div>}
+                  {!!qp.network_distance && <div className="flex justify-between"><span className="text-text-dim">Réseau</span><span className="font-medium text-foreground">{String(qp.network_distance) === "2,3" ? "2e et 3e degré" : String(qp.network_distance) === "2" ? "2e degré" : "3e degré et +"}</span></div>}
+                  {!!qp.industry    && <div className="flex justify-between"><span className="text-text-dim">Secteur</span><span className="font-medium text-foreground">{String(qp.industry)}</span></div>}
+                  <div className="flex justify-between"><span className="text-text-dim">Mode</span><span className="font-medium text-foreground">{c.mode === "auto" ? "Invitation auto" : "Validation manuelle"}</span></div>
+                  <div className="flex justify-between"><span className="text-text-dim">Statut</span><span className="font-medium text-foreground">{statusInfo.label}</span></div>
+                  <div className="flex justify-between"><span className="text-text-dim">Créée le</span><span className="font-medium text-foreground">{new Date(c.created_at).toLocaleDateString("fr-FR")}</span></div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => { setDetailCampaign(null); setFilterPending(c.id); setFilterQueue(c.id); setFilterInvited(c.id); }}
+                    className="col-span-2 rounded-md border border-accent/30 bg-accent/10 px-3 py-2 text-sm font-medium text-accent hover:bg-accent/20"
+                  >
+                    Voir les profils
+                  </button>
+                  {statusKey !== "done" && statusKey !== "archived" && (
+                    <button
+                      type="button"
+                      onClick={() => { handleToggleCampaignStatus(c.id, statusKey); setDetailCampaign(null); }}
+                      disabled={isPending}
+                      className="rounded-md border border-border px-3 py-2 text-sm font-medium text-text-muted hover:bg-panel-raised disabled:opacity-50"
+                    >
+                      {statusKey === "active" ? "Mettre en pause" : "Reprendre"}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => handleDuplicate(c)}
+                    className="rounded-md border border-border px-3 py-2 text-sm font-medium text-text-muted hover:bg-panel-raised"
+                  >
+                    Dupliquer
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleArchive(c.id)}
+                    disabled={isPending}
+                    className="rounded-md border border-border px-3 py-2 text-sm font-medium text-text-muted hover:border-warning/30 hover:text-warning disabled:opacity-50"
+                  >
+                    Archiver
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setDetailCampaign(null); setConfirmDeleteId(c.id); }}
+                    className="rounded-md border border-border px-3 py-2 text-sm font-medium text-text-muted hover:border-danger/30 hover:text-danger"
+                  >
+                    Supprimer
+                  </button>
+                </div>
+              </div>
             </div>
-          </section>
+          </div>
         );
-      })}
+      })()}
+
+      {/* ── Modal confirmation suppression ────────────────────────────── */}
+      {confirmDeleteId && (() => {
+        const c = campaignById.get(confirmDeleteId);
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setConfirmDeleteId(null)}>
+            <div className="w-full max-w-sm rounded-lg border border-border bg-panel p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+              <h3 className="mb-2 font-display text-base font-semibold text-foreground">Supprimer la campagne</h3>
+              <p className="mb-5 text-sm text-text-muted">
+                Supprimer <strong>{c?.name ?? "cette campagne"}</strong> et tous ses profils ? Cette action est irréversible.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => handleDeleteCampaign(confirmDeleteId)}
+                  disabled={isPending}
+                  className="flex-1 rounded-md border border-danger/30 bg-danger/10 px-4 py-2 text-sm font-medium text-danger transition-colors hover:bg-danger/20 disabled:opacity-50"
+                >
+                  {isPending ? "Suppression..." : "Supprimer"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmDeleteId(null)}
+                  className="rounded-md border border-border px-4 py-2 text-sm font-medium text-text-muted hover:bg-panel-raised"
+                >
+                  Annuler
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ── Modal nouvelle campagne ────────────────────────────────────── */}
+      {showModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => { setShowModal(false); setFormError(null); setPrefillData(null); }}>
+          <div className="w-full max-w-lg rounded-lg border border-border bg-panel p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="mb-5 font-display text-base font-semibold text-foreground">
+              {prefillData ? `Dupliquer — ${prefillData.name ?? "Campagne"}` : "Nouvelle campagne"}
+            </h3>
+            <form key={prefillData?.id ?? "new"} action={handleCreateCampaign} className="space-y-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="sm:col-span-2">
+                  <label className="mb-1.5 block text-xs font-medium text-text-muted">Nom de la campagne <span className="text-danger">*</span></label>
+                  <input type="text" name="name" required placeholder="Ex : Directeurs marketing Paris" defaultValue={prefillData ? `${prefillData.name ?? ""} (copie)` : ""} className="w-full rounded-md border border-border bg-panel-raised px-3 py-2 text-sm text-foreground outline-none focus:border-accent/50" />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="mb-1.5 block text-xs font-medium text-text-muted">Quel profil cherches-tu ? <span className="text-danger">*</span></label>
+                  <input type="text" name="keywords" required placeholder="Ex : directeur marketing, responsable RH" defaultValue={(prefillData?.query_params?.keywords as string) ?? ""} className="w-full rounded-md border border-border bg-panel-raised px-3 py-2 text-sm text-foreground outline-none focus:border-accent/50" />
+                  <p className="mt-1 text-xs text-text-dim">Titre du poste ou métier ciblé.</p>
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-xs font-medium text-text-muted">Localisation</label>
+                  <input type="text" name="location" placeholder="Ex : Paris, Lyon, France" defaultValue={(prefillData?.query_params?.location as string) ?? ""} className="w-full rounded-md border border-border bg-panel-raised px-3 py-2 text-sm text-foreground outline-none focus:border-accent/50" />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-xs font-medium text-text-muted">Secteur d&apos;activité</label>
+                  <input type="text" name="industry" placeholder="Ex : Marketing, SaaS B2B, Finance" defaultValue={(prefillData?.query_params?.industry as string) ?? ""} className="w-full rounded-md border border-border bg-panel-raised px-3 py-2 text-sm text-foreground outline-none focus:border-accent/50" />
+                  <p className="mt-1 text-xs text-text-dim">Laisse vide pour ne pas filtrer.</p>
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="mb-2 block text-xs font-medium text-text-muted">Niveau de relation</label>
+                  <div className="space-y-2">
+                    {[
+                      { value: "2,3", label: "2e et 3e degré", desc: "Amis d'amis + inconnus — le plus large panel.", recommended: true },
+                      { value: "2",   label: "2e degré uniquement", desc: "Contacts de tes contacts — taux d'acceptation plus élevé." },
+                      { value: "3",   label: "3e degré et +", desc: "Inconnus hors de ton réseau — volume maximal." },
+                    ].map(({ value, label, desc, recommended }) => (
+                      <label key={value} className="flex cursor-pointer items-start gap-2.5 rounded-md border border-border bg-panel-raised px-3 py-2.5 hover:border-accent/30">
+                        <input type="radio" name="network_distance" value={value} defaultChecked={(prefillData?.query_params?.network_distance as string ?? "2,3") === value} className="mt-0.5 shrink-0" />
+                        <div>
+                          <span className="text-sm font-medium text-foreground">{label}</span>
+                          {recommended && <span className="ml-2 rounded-sm bg-accent/10 px-1.5 py-0.5 text-xs font-medium text-accent">Recommandé</span>}
+                          <p className="mt-0.5 text-xs text-text-dim">{desc}</p>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-xs font-medium text-text-muted">Objectif (profils)</label>
+                  <input type="number" name="target_count" min={1} max={5000} defaultValue={prefillData?.target_count ?? 500} className="w-full rounded-md border border-border bg-panel-raised px-3 py-2 text-sm text-foreground outline-none focus:border-accent/50" />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-xs font-medium text-text-muted">Postes à éviter</label>
+                  <input type="text" name="exclude_titles" placeholder="stagiaire, freelance" className="w-full rounded-md border border-border bg-panel-raised px-3 py-2 text-sm text-foreground outline-none focus:border-accent/50" />
+                  <p className="mt-1 text-xs text-text-dim">Séparés par des virgules.</p>
+                </div>
+              </div>
+              <div>
+                <label className="mb-2 block text-xs font-medium text-text-muted">Mode</label>
+                <div className="flex gap-3">
+                  <label className="flex flex-1 cursor-pointer items-start gap-2.5 rounded-md border border-border bg-panel-raised px-3 py-2.5">
+                    <input type="radio" name="mode" value="validation" defaultChecked={(prefillData?.mode ?? "validation") === "validation"} className="mt-0.5" />
+                    <div>
+                      <span className="text-sm font-medium text-foreground">Validation manuelle</span>
+                      <p className="text-xs text-text-dim">Tu choisis les profils avant l&apos;envoi.</p>
+                    </div>
+                  </label>
+                  <label className="flex flex-1 cursor-pointer items-start gap-2.5 rounded-md border border-border bg-panel-raised px-3 py-2.5">
+                    <input type="radio" name="mode" value="auto" defaultChecked={prefillData?.mode === "auto"} className="mt-0.5" />
+                    <div>
+                      <span className="text-sm font-medium text-foreground">Invitation auto</span>
+                      <p className="text-xs text-text-dim">Invitations envoyées automatiquement.</p>
+                    </div>
+                  </label>
+                </div>
+              </div>
+              {formError && <p className="text-sm text-danger">{formError}</p>}
+              <div className="flex gap-3 pt-1">
+                <button type="submit" disabled={isPending} className="rounded-md border border-accent/30 bg-accent/10 px-4 py-2 text-sm font-medium text-accent transition-colors hover:bg-accent/20 disabled:opacity-50">
+                  {isPending ? "Création..." : "Lancer la campagne"}
+                </button>
+                <button type="button" onClick={() => { setShowModal(false); setFormError(null); }} className="rounded-md border border-border px-4 py-2 text-sm font-medium text-text-muted transition-colors hover:bg-panel-raised">
+                  Annuler
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

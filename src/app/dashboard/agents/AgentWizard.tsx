@@ -12,11 +12,15 @@ import {
   buildFirstMessagePromptContent,
   EMPTY_FIRST_MESSAGE_FORM,
   FIRST_MESSAGE_OBJECTIF,
+  STRUCTURE_MESSAGE_LABELS,
   type FirstMessageAgentType,
   type FirstMessageFormData,
+  type StructureMessage,
 } from "./firstMessageTemplate";
+import TestAgentModal from "./TestAgentModal";
+import TestFirstMessageModal from "./TestFirstMessageModal";
 
-type Step = "type" | "choice" | "form" | "generating" | "preview" | "fm_form" | "fm_generating" | "fm_preview";
+type Step = "type" | "choice" | "form" | "generating" | "preview" | "fm_mode" | "fm_form" | "fm_generating" | "fm_preview";
 
 const GENERATING_STEPS = [
   "Analyse de tes reponses...",
@@ -39,6 +43,7 @@ export default function AgentWizard({
   onCreate,
   isPending,
   canEditPrompt = false,
+  allowedRoles = ["icebreaker", "conversation"],
 }: {
   onCancel: () => void;
   onCreate: (data: {
@@ -49,6 +54,7 @@ export default function AgentWizard({
   }) => void;
   isPending: boolean;
   canEditPrompt?: boolean;
+  allowedRoles?: string[];
 }) {
   const [step, setStep] = useState<Step>("type");
   const [agentType, setAgentType] = useState<"conversation" | FirstMessageAgentType | null>(null);
@@ -63,6 +69,13 @@ export default function AgentWizard({
   const [fmAgentName, setFmAgentName] = useState("");
   const [fmGeneratedPrompt, setFmGeneratedPrompt] = useState("");
   const [fmGeneratingStepIndex, setFmGeneratingStepIndex] = useState(0);
+
+  const [testingAgent, setTestingAgent] = useState<{
+    id: string;
+    name: string | null;
+    prompt_content: string | null;
+    agentType: "conversation" | "icebreaker" | "invitation_recue";
+  } | null>(null);
 
   function handleGenerate() {
     setStep("generating");
@@ -87,7 +100,10 @@ export default function AgentWizard({
   }
 
   const fmFormValid =
-    fmForm.userName.trim() && fmForm.businessName.trim() && fmForm.businessDescription.trim();
+    fmForm.userName.trim() &&
+    fmForm.businessName.trim() &&
+    fmForm.businessDescription.trim() &&
+    (agentType !== "icebreaker" || fmForm.sujetLegitimite.trim());
 
   useEffect(() => {
     if (step !== "generating") return;
@@ -198,6 +214,9 @@ export default function AgentWizard({
 
   // --- ECRAN TYPE D'AGENT ---
   if (step === "type") {
+    const canConversation = allowedRoles.includes("conversation");
+    const canIcebreaker = allowedRoles.includes("icebreaker");
+
     return (
       <div>
         <p className="mb-4 text-sm text-text-muted">
@@ -206,30 +225,46 @@ export default function AgentWizard({
         <div className="space-y-3">
           <button
             type="button"
+            disabled={!canConversation}
             onClick={() => {
               setAgentType("conversation");
               setStep("choice");
             }}
-            className="w-full rounded-lg border border-positive/30 bg-positive/10 p-4 text-left transition-colors hover:border-positive/50"
+            className="w-full rounded-lg border border-positive/30 bg-positive/10 p-4 text-left transition-colors hover:border-positive/50 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <p className="text-sm font-semibold text-foreground">Agent conversationnel</p>
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-semibold text-foreground">Agent conversationnel</p>
+              {!canConversation && (
+                <span className="rounded border border-border-strong px-1.5 py-0.5 font-display text-[9px] font-medium uppercase tracking-wider text-text-dim bg-panel">
+                  Forfait
+                </span>
+              )}
+            </div>
             <p className="mt-0.5 text-xs text-text-muted">
               Repond aux messages de tes prospects pendant toute la discussion : il relance, repond aux questions, qualifie et amene vers ton objectif. C&apos;est l&apos;agent du role &quot;Conversation&quot;.
             </p>
           </button>
           <button
             type="button"
+            disabled={!canIcebreaker}
             onClick={() => {
               setAgentType("icebreaker");
               setFmForm(EMPTY_FIRST_MESSAGE_FORM);
               setFmAgentName("");
-              setStep("fm_form");
+              setStep("fm_mode");
             }}
-            className="w-full rounded-lg border border-accent/30 bg-accent/10 p-4 text-left transition-colors hover:border-accent/50"
+            className="w-full rounded-lg border border-accent/30 bg-accent/10 p-4 text-left transition-colors hover:border-accent/50 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <p className="text-sm font-semibold text-foreground">
-              Agent icebreaker <span className="font-normal text-text-muted">(premier message)</span>
-            </p>
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-semibold text-foreground">
+                Agent icebreaker <span className="font-normal text-text-muted">(premier message)</span>
+              </p>
+              {!canIcebreaker && (
+                <span className="rounded border border-border-strong px-1.5 py-0.5 font-display text-[9px] font-medium uppercase tracking-wider text-text-dim bg-panel">
+                  Forfait
+                </span>
+              )}
+            </div>
             <p className="mt-0.5 text-xs text-text-muted">
               Envoie automatiquement UN SEUL message dès qu&apos;un prospect accepte une invitation que tu lui as envoyee. C&apos;est l&apos;agent du role &quot;Icebreaker&quot;.
             </p>
@@ -307,6 +342,51 @@ export default function AgentWizard({
     );
   }
 
+  // --- ECRAN MODE ICEBREAKER ---
+  if (step === "fm_mode") {
+    return (
+      <div>
+        <p className="mb-4 text-sm text-text-muted">
+          Quel type d&apos;agent icebreaker veux-tu creer ?
+        </p>
+        <div className="space-y-3">
+          {(Object.entries(STRUCTURE_MESSAGE_LABELS) as [StructureMessage, { title: string; description: string }][]).map(
+            ([key, { title, description }]) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => {
+                  setFmForm((prev) => ({ ...prev, structureMessage: key }));
+                  setStep("fm_form");
+                }}
+                className="w-full rounded-lg border border-accent/30 bg-accent/10 p-4 text-left transition-colors hover:border-accent/50"
+              >
+                <p className="text-sm font-semibold text-foreground">{title}</p>
+                <p className="mt-0.5 text-xs text-text-muted">{description}</p>
+              </button>
+            )
+          )}
+        </div>
+        <div className="mt-5 flex justify-between">
+          <button
+            type="button"
+            onClick={() => setStep("type")}
+            className="rounded-md border border-border-strong px-4 py-2 text-sm text-text-muted hover:bg-panel-raised hover:text-foreground"
+          >
+            Retour
+          </button>
+          <button
+            type="button"
+            onClick={onCancel}
+            className="rounded-md border border-border-strong px-4 py-2 text-sm text-text-muted hover:bg-panel-raised hover:text-foreground"
+          >
+            Annuler
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   // --- ECRAN GENERATION ---
   if (step === "generating") {
     return (
@@ -325,8 +405,34 @@ export default function AgentWizard({
     return (
       <div className="space-y-4">
         <div className="rounded-md border border-accent/30 bg-accent/10 px-3 py-2 text-xs text-foreground">
-          Agent &quot;premier message&quot; ({typeLabel}) : il envoie automatiquement UN SEUL message, pas une conversation. Le formulaire est donc plus court.
+          <span className="font-medium">{typeLabel}</span>
+          {agentType === "icebreaker" && fmForm.structureMessage && (
+            <>
+              {" "}
+              &mdash;{" "}
+              <span className="text-text-muted">
+                {STRUCTURE_MESSAGE_LABELS[fmForm.structureMessage].title}
+              </span>
+              <button
+                type="button"
+                onClick={() => setStep("fm_mode")}
+                className="ml-2 underline underline-offset-2 hover:text-accent"
+              >
+                changer
+              </button>
+            </>
+          )}
         </div>
+        {agentType === "icebreaker" && (
+          <TextAreaField
+            label="Terrain d'ouverture"
+            required
+            value={fmForm.sujetLegitimite}
+            onChange={(v) => updateFmField("sujetLegitimite", v)}
+            placeholder="Le sujet sur lequel tu es legitime pour amorcer la conversation. Ex : la prospection commerciale que les independants repoussent faute de temps"
+            rows={2}
+          />
+        )}
         <Field
           label="Ton nom (celui affiche sur ton profil LinkedIn)"
           required
@@ -393,7 +499,7 @@ export default function AgentWizard({
         <div className="flex items-center justify-between gap-3 border-t border-border pt-4">
           <button
             type="button"
-            onClick={() => setStep("type")}
+            onClick={() => setStep(agentType === "icebreaker" ? "fm_mode" : "type")}
             className="rounded-md border border-border-strong px-4 py-2 text-sm text-text-muted hover:bg-panel-raised hover:text-foreground"
           >
             Retour
@@ -437,7 +543,9 @@ export default function AgentWizard({
     return (
       <div>
         <p className="mb-3 text-sm text-text-muted">
-          Voici le prompt genere a partir de tes reponses. Relis-le et ajuste-le si besoin avant de creer l&apos;agent.
+          {canEditPrompt
+            ? "Voici le prompt genere a partir de tes reponses. Relis-le et ajuste-le si besoin avant de creer l'agent."
+            : "Voici le prompt genere a partir de tes reponses. Tu peux le relire avant de creer l'agent."}
         </p>
         <div className="mb-4">
           <label className="mb-1 block text-sm font-medium text-text-muted">
@@ -453,12 +561,25 @@ export default function AgentWizard({
         </div>
         <div className="mb-4">
           <label className="mb-1 block text-sm font-medium text-text-muted">Prompt genere</label>
-          <textarea
-            value={fmGeneratedPrompt}
-            onChange={(e) => setFmGeneratedPrompt(e.target.value)}
-            rows={16}
-            className="w-full rounded-md border border-border-strong bg-panel-raised px-3 py-2 font-display text-xs text-foreground focus:border-accent focus:outline-none"
-          />
+          {canEditPrompt ? (
+            <textarea
+              value={fmGeneratedPrompt}
+              onChange={(e) => setFmGeneratedPrompt(e.target.value)}
+              rows={16}
+              className="w-full rounded-md border border-border-strong bg-panel-raised px-3 py-2 font-display text-xs text-foreground focus:border-accent focus:outline-none"
+            />
+          ) : (
+            <div>
+              <div className="max-h-96 overflow-y-auto rounded-md border border-border bg-panel-raised px-3 py-2.5">
+                <p className="whitespace-pre-wrap font-mono text-xs text-text-dim">
+                  {fmGeneratedPrompt}
+                </p>
+              </div>
+              <p className="mt-1 text-xs text-text-dim">
+                Lecture seule — modifiable uniquement par l&apos;equipe Kaizen.
+              </p>
+            </div>
+          )}
         </div>
         <div className="flex justify-between gap-3">
           <button
@@ -475,6 +596,21 @@ export default function AgentWizard({
               className="rounded-md border border-border-strong px-4 py-2 text-sm text-text-muted hover:bg-panel-raised hover:text-foreground"
             >
               Annuler
+            </button>
+            <button
+              type="button"
+              disabled={!fmAgentName.trim()}
+              onClick={() =>
+                setTestingAgent({
+                  id: "test",
+                  name: fmAgentName.trim() || "Agent en cours de creation",
+                  prompt_content: fmGeneratedPrompt,
+                  agentType: agentType as "icebreaker" | "invitation_recue",
+                })
+              }
+              className="rounded-md border border-accent/30 bg-accent/10 px-4 py-2 text-sm font-medium text-accent transition-colors hover:bg-accent/20 disabled:opacity-50"
+            >
+              Tester
             </button>
             <button
               type="button"
@@ -502,7 +638,9 @@ export default function AgentWizard({
     return (
       <div>
         <p className="mb-3 text-sm text-text-muted">
-          Voici le prompt genere a partir de tes reponses. Relis-le et ajuste-le si besoin avant de creer l&apos;agent.
+          {canEditPrompt
+            ? "Voici le prompt genere a partir de tes reponses. Relis-le et ajuste-le si besoin avant de creer l'agent."
+            : "Voici le prompt genere a partir de tes reponses. Tu peux le relire avant de creer l'agent."}
         </p>
         <div className="mb-4">
           <label className="mb-1 block text-sm font-medium text-text-muted">
@@ -518,12 +656,25 @@ export default function AgentWizard({
         </div>
         <div className="mb-4">
           <label className="mb-1 block text-sm font-medium text-text-muted">Prompt genere</label>
-          <textarea
-            value={generatedPrompt}
-            onChange={(e) => setGeneratedPrompt(e.target.value)}
-            rows={16}
-            className="w-full rounded-md border border-border-strong bg-panel-raised px-3 py-2 font-display text-xs text-foreground focus:border-accent focus:outline-none"
-          />
+          {canEditPrompt ? (
+            <textarea
+              value={generatedPrompt}
+              onChange={(e) => setGeneratedPrompt(e.target.value)}
+              rows={16}
+              className="w-full rounded-md border border-border-strong bg-panel-raised px-3 py-2 font-display text-xs text-foreground focus:border-accent focus:outline-none"
+            />
+          ) : (
+            <div>
+              <div className="max-h-96 overflow-y-auto rounded-md border border-border bg-panel-raised px-3 py-2.5">
+                <p className="whitespace-pre-wrap font-mono text-xs text-text-dim">
+                  {generatedPrompt}
+                </p>
+              </div>
+              <p className="mt-1 text-xs text-text-dim">
+                Lecture seule — modifiable uniquement par l&apos;equipe Kaizen.
+              </p>
+            </div>
+          )}
         </div>
         <div className="flex justify-between gap-3">
           <button
@@ -540,6 +691,21 @@ export default function AgentWizard({
               className="rounded-md border border-border-strong px-4 py-2 text-sm text-text-muted hover:bg-panel-raised hover:text-foreground"
             >
               Annuler
+            </button>
+            <button
+              type="button"
+              disabled={!agentName.trim()}
+              onClick={() =>
+                setTestingAgent({
+                  id: "test",
+                  name: agentName.trim() || "Agent en cours de creation",
+                  prompt_content: generatedPrompt,
+                  agentType: "conversation",
+                })
+              }
+              className="rounded-md border border-accent/30 bg-accent/10 px-4 py-2 text-sm font-medium text-accent transition-colors hover:bg-accent/20 disabled:opacity-50"
+            >
+              Tester
             </button>
             <button
               type="button"
@@ -893,6 +1059,20 @@ export default function AgentWizard({
           )}
         </div>
       </div>
+      {testingAgent && (
+        testingAgent.agentType === "conversation" ? (
+          <TestAgentModal
+            agent={{ id: "test", name: testingAgent.name, prompt_content: testingAgent.prompt_content }}
+            onClose={() => setTestingAgent(null)}
+          />
+        ) : (
+          <TestFirstMessageModal
+            agent={{ id: "test", name: testingAgent.name, prompt_content: testingAgent.prompt_content }}
+            agentTypeLabel={testingAgent.agentType === "icebreaker" ? "Icebreaker" : "Invitation recue"}
+            onClose={() => setTestingAgent(null)}
+          />
+        )
+      )}
     </div>
   );
 }

@@ -3,6 +3,21 @@
 import { useState } from "react";
 import { testFirstMessage } from "./actions";
 
+type ParsedReply = {
+  message: string;
+  accroche: string | null;
+  profil_insuffisant: boolean;
+} | null;
+
+function parseReply(raw: string): ParsedReply {
+  const cleaned = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
+  try {
+    return JSON.parse(cleaned) as ParsedReply;
+  } catch {
+    return null;
+  }
+}
+
 export default function TestFirstMessageModal({
   agent,
   agentTypeLabel,
@@ -14,8 +29,10 @@ export default function TestFirstMessageModal({
 }) {
   const [firstName, setFirstName] = useState("");
   const [headline, setHeadline] = useState("");
-  const [profileSummary, setProfileSummary] = useState("");
-  const [reply, setReply] = useState<string | null>(null);
+  const [about, setAbout] = useState("");
+
+  const [rawReply, setRawReply] = useState<string | null>(null);
+  const [parsed, setParsed] = useState<ParsedReply>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -24,24 +41,34 @@ export default function TestFirstMessageModal({
       setError("Cet agent n'a pas de prompt configure.");
       return;
     }
+    if (!firstName.trim() && !headline.trim()) {
+      setError("Renseigne au moins le prenom ou le headline du prospect.");
+      return;
+    }
     setError(null);
     setLoading(true);
-    setReply(null);
+    setRawReply(null);
+    setParsed(null);
 
     const result = await testFirstMessage({
       promptContent: agent.prompt_content,
-      firstName,
-      headline,
-      profileSummary,
+      firstName: firstName.trim(),
+      headline: headline.trim(),
+      about: about.trim(),
     });
 
     if (result.error || !result.reply) {
       setError(result.error ?? "Reponse vide");
     } else {
-      setReply(result.reply);
+      setRawReply(result.reply);
+      setParsed(parseReply(result.reply));
     }
     setLoading(false);
   }
+
+  const inputClass =
+    "w-full rounded-md border border-border-strong bg-panel-raised px-2.5 py-1.5 text-sm text-foreground focus:border-accent focus:outline-none";
+  const labelClass = "mb-1 block text-xs font-medium text-text-muted";
 
   return (
     <div
@@ -50,16 +77,15 @@ export default function TestFirstMessageModal({
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-lg border border-border bg-panel shadow-xl">
+      <div className="flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-lg border border-border bg-panel shadow-xl">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-border px-5 py-4">
           <div>
             <h2 className="font-display text-base font-semibold uppercase tracking-widest text-foreground">
-              Tester {agent.name ?? "l'agent"}
+              Tester {agent.name ?? "l&apos;agent"}
             </h2>
             <p className="mt-0.5 text-xs text-text-muted">
-              Agent {agentTypeLabel} : il envoie un seul message automatique, pas de discussion.
-              Simulation : rien n&apos;est enregistre, vos vrais prospects ne sont pas affectes.
+              Agent {agentTypeLabel}. Simulation : rien n&apos;est envoye.
             </p>
           </div>
           <button
@@ -72,53 +98,58 @@ export default function TestFirstMessageModal({
         </div>
 
         <div className="overflow-y-auto px-5 py-4">
-          <p className="mb-3 text-sm text-text-muted">
-            Decris le profil du prospect simule. L&apos;agent va generer le message qu&apos;il lui
-            enverrait dans ces conditions.
+          <p className="mb-4 text-sm text-text-muted">
+            Decris le prospect. Seul le prenom ou le headline est requis -- l&apos;agent compose
+            avec ce qu&apos;il a.
           </p>
 
           <div className="space-y-3">
             <div>
-              <label className="mb-1 block text-xs font-medium text-text-muted">Prenom</label>
+              <label className={labelClass}>Prenom</label>
               <input
+                id="test-first-name"
                 value={firstName}
                 onChange={(e) => setFirstName(e.target.value)}
                 placeholder="Ex: Camille"
-                className="w-full rounded-md border border-border-strong bg-panel-raised px-2.5 py-1.5 text-sm text-foreground focus:border-accent focus:outline-none"
+                className={inputClass}
               />
             </div>
+
             <div>
-              <label className="mb-1 block text-xs font-medium text-text-muted">
-                Headline / poste
-              </label>
+              <label className={labelClass}>Headline / poste</label>
               <input
+                id="test-headline"
                 value={headline}
                 onChange={(e) => setHeadline(e.target.value)}
                 placeholder="Ex: Avocate en droit des affaires chez Dupont & Associes"
-                className="w-full rounded-md border border-border-strong bg-panel-raised px-2.5 py-1.5 text-sm text-foreground focus:border-accent focus:outline-none"
+                className={inputClass}
               />
             </div>
+
             <div>
-              <label className="mb-1 block text-xs font-medium text-text-muted">
-                Resume du profil
+              <label className={labelClass}>
+                A-propos{" "}
+                <span className="text-text-muted/60">(optionnel)</span>
               </label>
               <textarea
-                value={profileSummary}
-                onChange={(e) => setProfileSummary(e.target.value)}
-                rows={5}
-                placeholder={`Ex:\nNom: Camille Martin\nPoste: Avocate en droit des affaires\nEntreprise: Dupont & Associes\nLocalisation: Lyon\n\nPublications recentes:\n- A partage un article sur la mediation en entreprise`}
-                className="w-full rounded-md border border-border-strong bg-panel-raised px-2.5 py-1.5 text-sm text-foreground focus:border-accent focus:outline-none"
+                id="test-about"
+                value={about}
+                onChange={(e) => setAbout(e.target.value)}
+                rows={3}
+                placeholder="Ex: J'accompagne les PME dans leurs contentieux contractuels depuis 10 ans..."
+                className={inputClass}
               />
             </div>
           </div>
 
           <button
             type="button"
+            id="test-generate-btn"
             onClick={handleGenerate}
             disabled={loading}
             className="mt-4 w-full rounded-md border border-accent/30 bg-accent/10 px-4 py-2 text-sm font-medium text-accent transition-colors hover:bg-accent/20 disabled:opacity-50"
           >
-            {loading ? "Generation..." : "Generer le message"}
+            {loading ? "Generation en cours..." : "Generer le message"}
           </button>
 
           {error && (
@@ -127,14 +158,44 @@ export default function TestFirstMessageModal({
             </p>
           )}
 
-          {reply && (
-            <div className="mt-4">
-              <p className="mb-1 text-xs font-medium text-text-muted">Message genere</p>
-              <div className="rounded-2xl rounded-bl-sm border border-border bg-panel-raised px-4 py-2.5">
-                <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">
-                  {reply}
-                </p>
-              </div>
+          {rawReply && (
+            <div className="mt-4 space-y-2">
+              {parsed ? (
+                parsed.profil_insuffisant ? (
+                  <div className="rounded-md border border-warning/30 bg-warning/10 px-4 py-3">
+                    <p className="text-sm font-medium text-warning">Profil insuffisant</p>
+                    <p className="mt-1 text-xs text-text-muted">
+                      Ajoute un headline ou un a-propos pour que l&apos;agent puisse construire une
+                      accroche.
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-xs font-medium text-text-muted">Message genere</p>
+                    <div className="rounded-2xl rounded-bl-sm border border-border bg-panel-raised px-4 py-2.5">
+                      <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">
+                        {parsed.message}
+                      </p>
+                    </div>
+                    {parsed.accroche && (
+                      <p className="text-xs text-text-muted">
+                        Accroche :{" "}
+                        <span className="font-medium text-foreground">{parsed.accroche}</span>
+                      </p>
+                    )}
+                  </>
+                )
+              ) : (
+                // JSON invalide : afficher le brut directement comme message
+                <>
+                  <p className="text-xs font-medium text-text-muted">Message genere</p>
+                  <div className="rounded-2xl rounded-bl-sm border border-border bg-panel-raised px-4 py-2.5">
+                    <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">
+                      {rawReply}
+                    </p>
+                  </div>
+                </>
+              )}
             </div>
           )}
         </div>

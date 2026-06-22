@@ -1,4 +1,5 @@
-# CLAUDE.md — Dashboard SaaS LinkedIn (Kaizen)
+# GEMINI.md
+ — Dashboard SaaS LinkedIn (Kaizen)
 
 ## Mots-clés projet
 

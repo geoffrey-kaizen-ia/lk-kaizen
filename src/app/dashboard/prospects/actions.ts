@@ -1,5 +1,6 @@
 "use server";
 
+import { createHash } from "crypto";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 
@@ -8,8 +9,6 @@ async function getAccountId() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  // Filtre user_id : la policy admin (geoffrey) lit toutes les fiches, sans ce
-  // filtre maybeSingle renverrait null et bloquerait l'admin.
   const { data } = await supabase
     .from("lk_clients_config")
     .select("account_id")
@@ -18,157 +17,150 @@ async function getAccountId() {
   return data?.account_id ?? null;
 }
 
-// Lance une recherche de profils LinkedIn via n8n (Unipile). Appel fire-and-forget :
-// n8n ecrit les resultats dans lk_search_results, le client revient les voir plus tard.
-export async function launchSearch(formData: FormData) {
+export async function createCampaign(formData: FormData) {
   const accountId = await getAccountId();
   if (!accountId) return { error: "Compte non configure" };
 
-  const keywords = formData.get("keywords") as string;
-  const location = (formData.get("location") as string) || null;
+  const name = (formData.get("name") as string)?.trim();
+  const keywords = (formData.get("keywords") as string)?.trim();
+  const location = (formData.get("location") as string)?.trim() || null;
   const networkDistance = (formData.get("network_distance") as string) || null;
-  const maxResultsRaw = (formData.get("max_results") as string)?.trim();
-  const maxResults = maxResultsRaw ? Number(maxResultsRaw) : 50;
-  const autoInvite = formData.get("auto_invite") === "on";
-
-  // Filtres de ciblage (Feature 4). Le secteur (include) est resolu en ID LinkedIn
-  // cote n8n et envoye a Unipile. L'exclusion de secteur n'est PAS geree :
-  // l'API classic/people ne la supporte pas et ne renvoie pas le secteur par profil.
-  // Les titres a exclure sont des mots-cles bruts, filtres sur le headline cote n8n.
   const industry = (formData.get("industry") as string)?.trim() || null;
   const excludeTitles = ((formData.get("exclude_titles") as string) || "")
     .split(",")
     .map((t) => t.trim())
     .filter((t) => t.length > 0);
+  const targetCountRaw = (formData.get("target_count") as string)?.trim();
+  const targetCount = targetCountRaw ? Number(targetCountRaw) : 500;
+  const mode = (formData.get("mode") as string) === "auto" ? "auto" : "validation";
 
-  if (!keywords?.trim()) return { error: "Les mots-cles sont obligatoires." };
-  if (!Number.isFinite(maxResults) || maxResults < 1 || maxResults > 50) {
-    return { error: "Le nombre de resultats doit etre entre 1 et 50." };
+  if (!name) return { error: "Le nom de la campagne est obligatoire." };
+  if (!keywords) return { error: "Les mots-cles sont obligatoires." };
+  if (!Number.isFinite(targetCount) || targetCount < 1 || targetCount > 5000) {
+    return { error: "L'objectif doit etre entre 1 et 5000 profils." };
   }
 
-  try {
-    const res = await fetch(process.env.N8N_PROSPECT_SEARCH_URL!, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        account_id: accountId,
-        keywords: keywords.trim(),
-        location,
-        network_distance: networkDistance,
-        max_results: maxResults,
-        auto_invite: autoInvite,
-        industry,
-        exclude_titles: excludeTitles,
-      }),
-      cache: "no-store",
-    });
+  const queryHash = createHash("sha256")
+    .update(`${accountId}:${keywords}:${location ?? ""}:${networkDistance ?? ""}`)
+    .digest("hex")
+    .slice(0, 16);
 
-    if (!res.ok) return { error: "Le lancement de la recherche a echoue." };
+  const supabase = await createClient();
+  const { data: campaign, error } = await supabase
+    .from("lk_searches")
+    .insert({
+      account_id: accountId,
+      name,
+      query_hash: queryHash,
+      query_params: { keywords, location, network_distance: networkDistance, industry, exclude_titles: excludeTitles },
+      target_count: targetCount,
+      mode,
+      status: "active",
+      total_scraped: 0,
+      total_sent: 0,
+    })
+    .select("id")
+    .single();
 
-    const data = await res.json().catch(() => null);
-    if (data?.exhausted) {
-      return { error: "Plus de profils disponibles pour cette recherche. Modifie tes criteres pour relancer." };
-    }
-  } catch {
-    return { error: "Impossible de contacter le service de recherche." };
-  }
+  if (error) return { error: error.message };
+
+  // Déclenche le scraping immédiatement sans attendre le cron 8h30
+  fetch("https://n8n.srv1213804.hstgr.cloud/webhook/Scrapping", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      account_id: accountId,
+      campaign_id: campaign.id,
+      keywords,
+      location: location || "",
+      network_distance: networkDistance || "",
+      max_results: 50,
+      auto_invite: mode === "auto",
+      industry: industry || "",
+      exclude_titles: excludeTitles,
+    }),
+  }).catch(() => {});
 
   revalidatePath("/dashboard/prospects");
   return { error: null };
 }
 
-// Coche/decoche un profil dans les resultats (status pending <-> selected).
-export async function toggleResultSelection(id: string, selected: boolean) {
+export async function deleteCampaign(id: string) {
   const supabase = await createClient();
-
-  const { error } = await supabase
-    .from("lk_search_results")
-    .update({ status: selected ? "selected" : "pending" })
-    .eq("id", id);
-
+  await supabase.from("lk_search_results").delete().eq("search_id", id);
+  const { error } = await supabase.from("lk_searches").delete().eq("id", id);
   if (error) return { error: error.message };
-  // Pas de revalidatePath : la selection est geree en etat local cote client
-  // pour eviter que les lignes se reordonnent a chaque clic.
+  revalidatePath("/dashboard/prospects");
   return { error: null };
 }
 
-// Selectionne ou deselectionne plusieurs profils d'un coup (case "tout selectionner").
-export async function setSelectionForIds(ids: string[], selected: boolean) {
+export async function archiveCampaign(id: string) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("lk_searches")
+    .update({ status: "archived" })
+    .eq("id", id);
+  if (error) return { error: error.message };
+  revalidatePath("/dashboard/prospects");
+  return { error: null };
+}
+
+export async function updateCampaignStatus(id: string, status: "active" | "paused") {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("lk_searches")
+    .update({ status })
+    .eq("id", id);
+  if (error) return { error: error.message };
+  revalidatePath("/dashboard/prospects");
+  return { error: null };
+}
+
+// Valide les profils sélectionnés → file d'attente (cron les enverra à 7h)
+export async function addToQueue(ids: string[]) {
   if (ids.length === 0) return { error: null };
   const supabase = await createClient();
-
   const { error } = await supabase
     .from("lk_search_results")
-    .update({ status: selected ? "selected" : "pending" })
+    .update({ status: "selected" })
     .in("id", ids);
-
   if (error) return { error: error.message };
+  revalidatePath("/dashboard/prospects");
   return { error: null };
 }
 
-// Ignore un profil qui n'interesse pas (status -> ignored). Le profil disparait des profils a valider.
+// Retire un profil de la file d'attente → retour en "à valider"
+export async function removeFromQueue(ids: string[]) {
+  if (ids.length === 0) return { error: null };
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("lk_search_results")
+    .update({ status: "pending" })
+    .in("id", ids);
+  if (error) return { error: error.message };
+  revalidatePath("/dashboard/prospects");
+  return { error: null };
+}
+
 export async function ignoreResult(id: string) {
   const supabase = await createClient();
-
   const { error } = await supabase
     .from("lk_search_results")
     .update({ status: "ignored" })
     .eq("id", id);
-
   if (error) return { error: error.message };
   revalidatePath("/dashboard/prospects");
   return { error: null };
 }
 
-// Ignore plusieurs profils d'un coup (bouton "Ignorer la selection").
 export async function ignoreSelectedIds(ids: string[]) {
   if (ids.length === 0) return { error: null };
   const supabase = await createClient();
-
   const { error } = await supabase
     .from("lk_search_results")
     .update({ status: "ignored" })
     .in("id", ids);
-
   if (error) return { error: error.message };
-  revalidatePath("/dashboard/prospects");
-  return { error: null };
-}
-
-// Envoie les invitations pour les profils selectionnes (status='selected') via n8n.
-export async function sendSelectedInvitations(searchId: string) {
-  const supabase = await createClient();
-  const accountId = await getAccountId();
-  if (!accountId) return { error: "Compte non configure" };
-
-  const { data: selected } = await supabase
-    .from("lk_search_results")
-    .select("id, provider_id")
-    .eq("search_id", searchId)
-    .eq("status", "selected");
-
-  if (!selected || selected.length === 0) {
-    return { error: "Aucun profil selectionne." };
-  }
-
-  try {
-    const res = await fetch(process.env.N8N_PROSPECT_SEARCH_URL!, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        action: "send_invitations",
-        account_id: accountId,
-        search_id: searchId,
-        provider_ids: selected.map((r) => r.provider_id),
-      }),
-      cache: "no-store",
-    });
-
-    if (!res.ok) return { error: "L'envoi des invitations a echoue." };
-  } catch {
-    return { error: "Impossible de contacter le service d'invitation." };
-  }
-
   revalidatePath("/dashboard/prospects");
   return { error: null };
 }

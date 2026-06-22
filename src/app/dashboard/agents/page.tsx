@@ -16,6 +16,14 @@ type Assignment = {
   is_enabled: boolean;
 };
 
+type Relance = {
+  id: string;
+  position: number;
+  content: string;
+  delay_days: number;
+  is_active: boolean;
+};
+
 export default async function AgentsPage({
   searchParams,
 }: {
@@ -31,6 +39,7 @@ export default async function AgentsPage({
     { data: agents, error },
     { data: assignments },
     { data: clientConfig },
+    { data: relances },
   ] = await Promise.all([
     supabase
       .from("lk_agents")
@@ -45,6 +54,10 @@ export default async function AgentsPage({
       .select("allowed_roles, can_edit_prompt, icebreaker_mode, icebreaker_template, icebreaker_enabled")
       .eq("user_id", user?.id ?? "")
       .maybeSingle(),
+    supabase
+      .from("lk_relances")
+      .select("id, position, content, delay_days, is_active")
+      .order("position", { ascending: true }),
   ]);
 
   return (
@@ -73,6 +86,7 @@ export default async function AgentsPage({
           icebreakerMode={(clientConfig?.icebreaker_mode as "ai" | "template") ?? "ai"}
           icebreakerTemplate={clientConfig?.icebreaker_template ?? ""}
           icebreakerEnabled={clientConfig?.icebreaker_enabled ?? true}
+          relances={(relances ?? []) as Relance[]}
         />
       )}
     </div>
