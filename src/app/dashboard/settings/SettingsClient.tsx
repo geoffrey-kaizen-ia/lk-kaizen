@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { updateCadenceSettings } from "./actions";
+import { updateCadenceSettings, updateDailyReport } from "./actions";
 import {
   DELAY_PRESETS,
   DELAY_MODES,
@@ -49,6 +49,7 @@ export default function SettingsClient({
   activeHoursEnd,
   activeDays,
   timezone,
+  dailyReport,
 }: {
   dailyInviteLimit: number;
   dailyMessageLimit: number;
@@ -57,6 +58,7 @@ export default function SettingsClient({
   activeHoursEnd: number;
   activeDays: number[];
   timezone: string;
+  dailyReport: boolean;
 }) {
   const [inviteLimit, setInviteLimit] = useState(dailyInviteLimit);
   const [messageLimit, setMessageLimit] = useState(dailyMessageLimit);
@@ -68,7 +70,11 @@ export default function SettingsClient({
   const [days, setDays] = useState<number[]>(activeDays);
   const [tz, setTz] = useState(timezone);
 
+  const [reportEnabled, setReportEnabled] = useState(dailyReport);
+  const [reportError, setReportError] = useState<string | null>(null);
+
   const [isPending, startTransition] = useTransition();
+  const [reportPending, startReportTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
@@ -78,6 +84,19 @@ export default function SettingsClient({
     setDays((prev) =>
       prev.includes(value) ? prev.filter((d) => d !== value) : [...prev, value]
     );
+  }
+
+  function handleToggleReport() {
+    const next = !reportEnabled;
+    setReportEnabled(next);
+    setReportError(null);
+    startReportTransition(async () => {
+      const res = await updateDailyReport(next);
+      if (res.error) {
+        setReportEnabled(!next);
+        setReportError(res.error);
+      }
+    });
   }
 
   function handleSubmit(formData: FormData) {
@@ -94,6 +113,7 @@ export default function SettingsClient({
   }
 
   return (
+    <>
     <form action={handleSubmit} className="space-y-6">
       {/* Cadence */}
       <section className="rounded-md border border-border bg-panel p-5">
@@ -286,5 +306,39 @@ export default function SettingsClient({
         {isPending ? "Enregistrement..." : "Enregistrer"}
       </button>
     </form>
+
+    <section className="mt-8 space-y-4 border-t border-border pt-8">
+      <h2 className="font-display text-xs font-semibold uppercase tracking-widest text-text-dim">
+        Notifications
+      </h2>
+      <div className="flex items-center justify-between gap-4 rounded-lg border border-border bg-panel p-4">
+        <div>
+          <p className="text-sm font-medium text-foreground">Rapport quotidien par e-mail</p>
+          <p className="mt-0.5 text-xs text-text-muted">
+            Reçois chaque matin un résumé de l&apos;activité LinkedIn de la veille.
+          </p>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={reportEnabled}
+          onClick={handleToggleReport}
+          disabled={reportPending}
+          className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors focus:outline-none disabled:opacity-40 ${
+            reportEnabled ? "bg-accent" : "bg-border-strong"
+          }`}
+        >
+          <span
+            className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-sm transition-transform ${
+              reportEnabled ? "translate-x-4" : "translate-x-0"
+            }`}
+          />
+        </button>
+      </div>
+      {reportError && (
+        <p className="text-xs text-danger">{reportError}</p>
+      )}
+    </section>
+    </>
   );
 }

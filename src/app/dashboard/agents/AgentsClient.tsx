@@ -1118,7 +1118,11 @@ function RelanceCard({
     const next = !isActive;
     setIsActive(next);
     startTransition(async () => {
-      await updateRelance(relance.id, { is_active: next });
+      const res = await updateRelance(relance.id, { is_active: next });
+      if (res.error) {
+        setIsActive(!next);
+        setError(res.error);
+      }
     });
   }
 

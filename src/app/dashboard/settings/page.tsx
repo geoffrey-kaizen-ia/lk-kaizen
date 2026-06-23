@@ -12,7 +12,7 @@ export default async function SettingsPage() {
   const { data: config } = await supabase
     .from("lk_clients_config")
     .select(
-      "daily_invite_limit, daily_message_limit, response_delay_mode, active_hours_start, active_hours_end, active_days, timezone"
+      "daily_invite_limit, daily_message_limit, response_delay_mode, active_hours_start, active_hours_end, active_days, timezone, daily_report"
     )
     .eq("user_id", user?.id ?? "")
     .maybeSingle();
@@ -33,6 +33,7 @@ export default async function SettingsPage() {
         activeHoursEnd={config?.active_hours_end ?? 19}
         activeDays={config?.active_days ?? [1, 2, 3, 4, 5]}
         timezone={config?.timezone ?? "Europe/Paris"}
+        dailyReport={config?.daily_report ?? true}
       />
     </div>
   );

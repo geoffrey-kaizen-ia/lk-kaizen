@@ -76,3 +76,20 @@ export async function updateCadenceSettings(formData: FormData) {
   revalidatePath("/dashboard/settings");
   return { error: null };
 }
+
+export async function updateDailyReport(enabled: boolean) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Session expirée, recharge la page." };
+
+  const { error } = await supabase
+    .from("lk_clients_config")
+    .update({ daily_report: enabled })
+    .eq("user_id", user.id);
+
+  if (error) return { error: error.message };
+  revalidatePath("/dashboard/settings");
+  return { error: null };
+}
