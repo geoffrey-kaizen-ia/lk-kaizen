@@ -16,7 +16,7 @@ export function isDelayMode(value: unknown): value is DelayMode {
 }
 
 // Plafonds socle LinkedIn (ne peuvent pas etre depasses par le client).
-export const SOCLE_MAX_INVITE_LIMIT = 25;
+export const SOCLE_MAX_INVITE_LIMIT = 20;
 export const SOCLE_MAX_MESSAGE_LIMIT = 40;
 
 // Fuseaux proposes dans l'UI et autorises par la validation serveur.

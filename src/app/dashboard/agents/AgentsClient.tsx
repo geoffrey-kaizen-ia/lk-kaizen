@@ -20,8 +20,21 @@ const IB_VARIABLES = [
 ];
 
 const RELANCE_VARS = [
-  { label: "{{first_name}}", desc: "Prenom" },
+  { label: "{{first_name}}", desc: "Prénom" },
   { label: "{{last_name}}", desc: "Nom" },
+];
+
+const RELANCE_TEMPLATES = [
+  "Bonjour {{first_name}}, je reviens vers toi suite à mon message précédent. Tu as eu l'occasion d'y jeter un œil ?",
+  "Bonjour {{first_name}}, toujours dans ma liste de personnes avec qui j'aimerais bien échanger. Le timing est peut-être meilleur maintenant ?",
+  "Bonjour {{first_name}}, je referme la boucle sur mon message. Si ce n'est pas pour toi, dis-le moi franchement, aucun souci.",
+  "Bonjour {{first_name}}, pas de réponse de ta part, peut-être pas le bon moment. Je reste disponible si jamais tu veux qu'on en parle.",
+  "Bonjour {{first_name}}, je retente ma chance ! Tu as deux minutes pour qu'on échange ?",
+  "Bonjour {{first_name}}, dernier message de ma part. Si tu as 15 min pour en parler, je suis là.",
+  "Bonjour {{first_name}}, je passe te faire signe. Mon message précédent a peut-être été enterré dans ta messagerie ?",
+  "Bonjour {{first_name}}, comment ça se passe de ton côté en ce moment ? Je me demandais si mon message avait résonné.",
+  "Bonjour {{first_name}}, un petit coucou pour ne pas disparaître de ton radar. Toujours partant pour qu'on échange ?",
+  "Bonjour {{first_name}}, je voulais savoir si tu avais eu le temps de réfléchir. Aucune urgence, je suis là quand tu veux.",
 ];
 import AgentWizard from "./AgentWizard";
 import TestAgentModal from "./TestAgentModal";
@@ -54,9 +67,9 @@ type Relance = {
 const ROLES = [
   {
     key: "icebreaker",
-    label: "Icebreaker",
+    label: "Prise de contact",
     longDesc:
-      "Quand un prospect que tu as invite accepte ta demande de connexion, cet agent lui envoie automatiquement UN SEUL message pour briser la glace. Pas de conversation : juste un message d'ouverture, sans pitch ni lien.",
+      "Quand un prospect accepte ton invitation, cet agent lui envoie un seul message d'ouverture, personnalisé à partir de son profil. Selon son réglage, il pose une question ou propose ton invitation. Pas de conversation, juste l'ouverture.",
     iconColor: "text-accent",
     icon: (
       <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
@@ -93,8 +106,8 @@ const ROLES = [
 type RoleKey = (typeof ROLES)[number]["key"];
 
 const FIRST_MESSAGE_ROLE_LABELS: Record<string, string> = {
-  icebreaker: "Icebreaker",
-  invitation_recue: "Invitation recue",
+  icebreaker: "Prise de contact",
+  invitation_recue: "Invitation reçue",
 };
 
 // Quel agentType peut etre assigne a quel role : evite de mixer un agent
@@ -139,7 +152,7 @@ const AGENT_TYPE_ICON: Record<string, { label: string; iconColor: string; icon: 
     ),
   },
   icebreaker: {
-    label: "Agent icebreaker (premier message)",
+    label: "Agent prise de contact (premier message)",
     iconColor: "text-accent",
     icon: (
       <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
@@ -157,7 +170,7 @@ const AGENT_TYPE_ICON: Record<string, { label: string; iconColor: string; icon: 
     ),
   },
   invitation_recue: {
-    label: "Agent invitation recue (premier message)",
+    label: "Agent invitation reçue (premier message)",
     iconColor: "text-warning",
     icon: (
       <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
@@ -170,7 +183,7 @@ const AGENT_TYPE_ICON: Record<string, { label: string; iconColor: string; icon: 
 // Options du selecteur "Type d'agent" du formulaire (modal creation/edition).
 const AGENT_TYPE_OPTIONS: { value: string; label: string }[] = [
   { value: "conversation", label: "Conversation" },
-  { value: "icebreaker", label: "Icebreaker (premier message)" },
+  { value: "icebreaker", label: "Prise de contact (premier message)" },
 ];
 
 export default function AgentsClient({
@@ -421,9 +434,8 @@ export default function AgentsClient({
           Comprendre les agents
         </h2>
         <p className="mb-4 text-sm text-text-muted">
-          Chaque agent joue un seul role a la fois. L&apos;agent Icebreaker envoie un seul message
-          automatique (pas de discussion) quand un prospect accepte ton invitation, l&apos;agent
-          Conversation gere tous les echanges qui suivent.
+          Chaque agent joue un seul rôle à la fois. L&apos;agent Prise de contact envoie un seul message
+          automatique quand un prospect accepte ton invitation, l&apos;agent Conversation gère tous les échanges qui suivent.
         </p>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           {ROLES.map(({ key, label, longDesc, iconColor, icon }) => (
@@ -444,7 +456,7 @@ export default function AgentsClient({
           Roles actifs
         </h2>
         <p className="mb-4 text-sm text-text-muted">
-          Choisit quel agent joue chaque role dans ta sequence de prospection.
+          Choisis quel agent joue chaque rôle dans ta séquence de prospection.
         </p>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           {ROLES.filter((r) => r.key !== "relance").map(({ key, label, iconColor, icon }) => {
@@ -516,8 +528,8 @@ export default function AgentsClient({
                         )}
                       </div>
 
-                      {/* Option Message fixe — s'ouvre en accordeon */}
-                      <div className={`rounded-md border transition-colors ${templateActive ? "border-accent/30 bg-accent/5" : "border-border"}`}>
+                      {/* Option Message fixe — secondaire, replié en accordeon */}
+                      <div className={`rounded-md border transition-colors ${templateActive ? "border-border bg-panel-raised/50" : "border-border/50"}`}>
                         <button
                           type="button"
                           disabled={ibSaving}
@@ -527,17 +539,24 @@ export default function AgentsClient({
                           <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${templateActive ? "border-accent bg-accent" : "border-border-strong bg-panel-raised"}`}>
                             {templateActive && <span className="h-1.5 w-1.5 rounded-full bg-white" />}
                           </span>
-                          <span className={`text-sm font-medium ${templateActive ? "text-foreground" : "text-text-muted"}`}>Message fixe</span>
+                          <span className={`text-xs ${templateActive ? "font-medium text-foreground" : "text-text-dim"}`}>
+                            Ou utiliser un message fixe
+                          </span>
                           {templateActive && (
                             <span className="ml-auto rounded bg-accent/10 px-1.5 py-0.5 font-display text-[9px] font-semibold uppercase tracking-wider text-accent">Actif</span>
                           )}
                         </button>
+                        {!templateActive && (
+                          <p className="px-3 pb-3 text-[11px] leading-relaxed text-text-dim">
+                            Le même message pour tous, sans lecture du profil. À réserver aux cas où la personnalisation n&apos;apporte rien, comme un simple mot de remerciement.
+                          </p>
+                        )}
 
                         {/* Accordeon : uniquement si actif */}
                         {templateActive && (
                           <div className="border-t border-border/60 px-3 pb-3 pt-2.5 space-y-2.5">
                             <p className="text-xs text-text-muted">
-                              Le meme message part a chaque prospect. Utilise les variables pour personnaliser automatiquement avec son prenom ou son nom.
+                              Le même message part à chaque prospect. Utilise les variables pour personnaliser automatiquement avec son prénom ou son nom.
                             </p>
 
                             {/* Explication des variables */}
@@ -545,9 +564,9 @@ export default function AgentsClient({
                               <p className="text-[10px] font-semibold uppercase tracking-wider text-text-dim">Variable de personnalisation</p>
                               <div className="flex items-start gap-2">
                                 <code className="shrink-0 rounded border border-accent/30 bg-accent/10 px-1.5 py-0.5 font-mono text-[10px] text-accent">{`{{first_name}}`}</code>
-                                <p className="text-xs text-text-muted">Prenom du prospect tel qu&apos;il apparait sur LinkedIn. <span className="text-text-dim italic">Ex : Marie</span></p>
+                                <p className="text-xs text-text-muted">Prénom du prospect tel qu&apos;il apparaît sur LinkedIn. <span className="text-text-dim italic">Ex : Marie</span></p>
                               </div>
-                              <p className="text-[10px] text-text-dim">Kaizen remplace cette variable par le vrai prenom du prospect au moment de l&apos;envoi. Clique dessus pour l&apos;inserer dans ton message.</p>
+                              <p className="text-[10px] text-text-dim">Kaizen remplace cette variable par le vrai prénom du prospect au moment de l&apos;envoi. Clique dessus pour l&apos;insérer dans ton message.</p>
                             </div>
 
                             {/* Boutons insertion */}
@@ -569,12 +588,12 @@ export default function AgentsClient({
                               value={ibTemplate}
                               onChange={(e) => { setIbTemplate(e.target.value); setIbTemplateDirty(true); setIbSaved(false); }}
                               rows={4}
-                              placeholder="Bonjour {{first_name}}, ravi de te compter dans mon reseau !"
+                              placeholder="Bonjour {{first_name}}, ravi de te compter dans mon réseau !"
                               className="w-full resize-none rounded-md border border-border bg-panel px-2.5 py-2 text-xs text-foreground placeholder:text-text-dim outline-none focus:border-accent/50"
                             />
 
                             {ibError && <p className="text-xs text-danger">{ibError}</p>}
-                            {ibSaved && !ibError && <p className="text-xs text-positive">Message enregistre.</p>}
+                            {ibSaved && !ibError && <p className="text-xs text-positive">Message enregistré.</p>}
 
                             <button
                               type="button"
@@ -594,7 +613,7 @@ export default function AgentsClient({
 
                     </div>
                   ) : (
-                    <p className="text-xs text-text-dim">Non inclus dans votre forfait actuel.</p>
+                    <p className="text-xs text-text-dim">Non inclus dans ton forfait actuel.</p>
                   )}
                 </div>
               );
@@ -656,7 +675,7 @@ export default function AgentsClient({
                     </select>
                   </div>
                 ) : (
-                  <p className="text-xs text-text-dim">Non inclus dans votre forfait actuel.</p>
+                  <p className="text-xs text-text-dim">Non inclus dans ton forfait actuel.</p>
                 )}
               </div>
             );
@@ -727,6 +746,7 @@ export default function AgentsClient({
               onDelete={handleDelete}
               onTest={setTestingAgent}
               isPending={isPending}
+              canEditPrompt={canEditPrompt}
             />
           );
         })}
@@ -774,7 +794,7 @@ export default function AgentsClient({
           const agentType = testingAgent.knowledge_base?.agentType;
           const typeLabel =
             (typeof agentType === "string" && FIRST_MESSAGE_ROLE_LABELS[agentType]) ||
-            testingAssignedRoles.find((r) => r === "Icebreaker") ||
+            testingAssignedRoles.find((r) => r === "Prise de contact") ||
             "premier message";
           return (
             <TestFirstMessageModal
@@ -876,7 +896,7 @@ export default function AgentsClient({
                       required
                       defaultValue={editingAgent?.name ?? ""}
                       className="w-full rounded-md border border-border-strong bg-panel-raised px-3 py-2 text-sm text-foreground focus:border-accent focus:outline-none"
-                      placeholder={isRelance ? "Ex: Relance 1" : "Ex: Agent Icebreaker SaaS"}
+                      placeholder={isRelance ? "Ex: Relance 1" : "Ex: Prospection dirigeants TPE"}
                     />
                   </div>
 
@@ -1065,6 +1085,7 @@ function RelanceCard({
   const [isActive, setIsActive] = useState(relance?.is_active ?? true);
   const [dirty, setDirty] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showTemplates, setShowTemplates] = useState(false);
   const [isPending, startTransition] = useTransition();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -1121,7 +1142,7 @@ function RelanceCard({
             type="button"
             onClick={handleToggle}
             disabled={isPending}
-            title={isActive ? "Desactiver" : "Activer"}
+            title={isActive ? "Désactiver" : "Activer"}
             className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors focus:outline-none disabled:opacity-40 ${
               isActive ? "bg-accent" : "bg-border-strong"
             }`}
@@ -1144,27 +1165,54 @@ function RelanceCard({
               disabled={isPending}
               className="rounded-md border border-dashed border-border-strong px-4 py-2 text-xs text-text-muted transition-colors hover:border-accent/40 hover:text-accent disabled:opacity-50"
             >
-              {isPending ? "Creation..." : "+ Configurer cette relance"}
+              {isPending ? "Création..." : "+ Configurer cette relance"}
             </button>
           ) : (
-            <p className="text-xs text-text-dim">Configurez d&apos;abord la Relance 1</p>
+            <p className="text-xs text-text-dim">Configure d&apos;abord la Relance 1</p>
           )}
         </div>
       ) : (
         <div className="space-y-2.5">
-          <div className="flex flex-wrap gap-1">
-            {RELANCE_VARS.map((v) => (
-              <button
-                key={v.label}
-                type="button"
-                onClick={() => insertVar(v.label)}
-                title={v.desc}
-                className="rounded border border-accent/30 bg-accent/10 px-1.5 py-0.5 font-mono text-[10px] text-accent hover:bg-accent/20"
-              >
-                + {v.label}
-              </button>
-            ))}
+          <div className="flex flex-wrap items-center justify-between gap-1">
+            <div className="flex flex-wrap gap-1">
+              {RELANCE_VARS.map((v) => (
+                <button
+                  key={v.label}
+                  type="button"
+                  onClick={() => insertVar(v.label)}
+                  title={v.desc}
+                  className="rounded border border-accent/30 bg-accent/10 px-1.5 py-0.5 font-mono text-[10px] text-accent hover:bg-accent/20"
+                >
+                  + {v.label}
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowTemplates((v) => !v)}
+              className="text-[10px] text-text-dim hover:text-text-muted"
+            >
+              {showTemplates ? "Masquer les modèles" : "Choisir un modèle"}
+            </button>
           </div>
+          {showTemplates && (
+            <div className="rounded-md border border-border bg-panel-raised p-2 space-y-1">
+              {RELANCE_TEMPLATES.map((tpl, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => {
+                    setContent(tpl);
+                    setDirty(true);
+                    setShowTemplates(false);
+                  }}
+                  className="w-full rounded px-2 py-1.5 text-left text-[11px] text-text-muted hover:bg-panel hover:text-foreground transition-colors"
+                >
+                  {tpl}
+                </button>
+              ))}
+            </div>
+          )}
           <textarea
             ref={textareaRef}
             value={content}
@@ -1174,7 +1222,7 @@ function RelanceCard({
             className="w-full resize-none rounded-md border border-border-strong bg-panel-raised px-2.5 py-2 text-xs text-foreground placeholder:text-text-dim focus:border-accent/50 focus:outline-none"
           />
           <div className="flex items-center gap-2 text-xs text-text-muted">
-            <span>Envoyer apres</span>
+            <span>Envoyer après</span>
             <input
               type="number"
               min={1}
@@ -1186,7 +1234,7 @@ function RelanceCard({
               }}
               className="w-12 rounded-md border border-border-strong bg-panel-raised px-2 py-1 text-center text-xs text-foreground focus:border-accent/50 focus:outline-none"
             />
-            <span>jours sans reponse</span>
+            <span>jours sans réponse</span>
           </div>
           {error && <p className="text-xs text-danger">{error}</p>}
           <button
@@ -1199,12 +1247,36 @@ function RelanceCard({
                 : "border-border-strong text-text-muted"
             }`}
           >
-            {isPending ? "Enregistrement..." : dirty ? "Enregistrer les modifications" : "Enregistre"}
+            {isPending ? "Enregistrement..." : dirty ? "Enregistrer les modifications" : "Enregistrer"}
           </button>
         </div>
       )}
     </div>
   );
+}
+
+function buildAgentSummary(agent: Agent): string | null {
+  const kb = agent.knowledge_base as Record<string, unknown> | null;
+  if (!kb) return null;
+  const type = kb.agentType as string | undefined;
+  if (!type) return null;
+  const parts: string[] = [];
+  if (type === "icebreaker") {
+    const structure = kb.structureMessage as string | undefined;
+    if (structure === "diagnostic") parts.push("Mode diagnostic");
+    else if (structure === "proposition_directe") parts.push("Mode proposition directe");
+    const sujet = kb.sujetLegitimite as string | undefined;
+    if (sujet) parts.push(`Terrain : ${sujet}`);
+    const tutoiement = kb.tutoiement as boolean | undefined;
+    parts.push(tutoiement === false ? "Vouvoiement" : "Tutoiement");
+  } else if (type === "conversation") {
+    if (agent.objectif) parts.push(`Objectif : ${agent.objectif}`);
+    const tutoiement = kb.tutoiement as boolean | undefined;
+    parts.push(tutoiement === false ? "Vouvoiement" : "Tutoiement");
+  } else if (type === "relance") {
+    return "Message de relance automatique";
+  }
+  return parts.length > 0 ? parts.join(" · ") : null;
 }
 
 function AgentCard({
@@ -1215,6 +1287,7 @@ function AgentCard({
   onDelete,
   onTest,
   isPending,
+  canEditPrompt,
 }: {
   agent: Agent;
   assignedRoles: string[];
@@ -1223,8 +1296,10 @@ function AgentCard({
   onDelete: (id: string, name: string | null) => void;
   onTest: (a: Agent) => void;
   isPending: boolean;
+  canEditPrompt: boolean;
 }) {
   const typeIcon = AGENT_TYPE_ICON[getAgentType(agent) ?? ""] ?? null;
+  const summary = buildAgentSummary(agent);
 
   return (
     <li className="rounded-lg border border-border bg-panel p-5">
@@ -1285,10 +1360,16 @@ function AgentCard({
           </button>
         </div>
       </div>
-      {agent.prompt_content && (
-        <pre className="mt-3 max-h-28 overflow-hidden whitespace-pre-wrap rounded-md border border-border bg-panel-raised p-3 font-display text-xs text-text-muted [mask-image:linear-gradient(to_bottom,black_60%,transparent)]">
-          {agent.prompt_content}
-        </pre>
+      {canEditPrompt ? (
+        agent.prompt_content && (
+          <pre className="mt-3 max-h-28 overflow-hidden whitespace-pre-wrap rounded-md border border-border bg-panel-raised p-3 font-display text-xs text-text-muted [mask-image:linear-gradient(to_bottom,black_60%,transparent)]">
+            {agent.prompt_content}
+          </pre>
+        )
+      ) : (
+        summary && (
+          <p className="mt-2 text-xs text-text-dim">{summary}</p>
+        )
       )}
     </li>
   );

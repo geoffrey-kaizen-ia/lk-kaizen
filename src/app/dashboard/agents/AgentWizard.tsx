@@ -29,7 +29,7 @@ const GENERATING_STEPS = [
 ];
 
 const STEPS = [
-  { key: 1, label: "Identite" },
+  { key: 1, label: "Identité" },
   { key: 2, label: "Offre & cible" },
   { key: 3, label: "Preuves & objections" },
   { key: 4, label: "Style & voix" },
@@ -257,7 +257,7 @@ export default function AgentWizard({
           >
             <div className="flex items-center justify-between">
               <p className="text-sm font-semibold text-foreground">
-                Agent icebreaker <span className="font-normal text-text-muted">(premier message)</span>
+                Agent prise de contact <span className="font-normal text-text-muted">(premier message)</span>
               </p>
               {!canIcebreaker && (
                 <span className="rounded border border-border-strong px-1.5 py-0.5 font-display text-[9px] font-medium uppercase tracking-wider text-text-dim bg-panel">
@@ -266,7 +266,7 @@ export default function AgentWizard({
               )}
             </div>
             <p className="mt-0.5 text-xs text-text-muted">
-              Envoie automatiquement UN SEUL message dès qu&apos;un prospect accepte une invitation que tu lui as envoyee. C&apos;est l&apos;agent du role &quot;Icebreaker&quot;.
+              Envoie automatiquement UN SEUL message dès qu&apos;un prospect accepte une invitation que tu lui as envoyée. C&apos;est l&apos;agent du rôle &quot;Prise de contact&quot;.
             </p>
           </button>
         </div>
@@ -346,12 +346,15 @@ export default function AgentWizard({
   if (step === "fm_mode") {
     return (
       <div>
-        <p className="mb-4 text-sm text-text-muted">
-          Quel type d&apos;agent icebreaker veux-tu creer ?
+        <p className="mb-1 text-base font-semibold text-foreground">
+          Quel type d&apos;agent veux-tu creer ?
+        </p>
+        <p className="mb-4 text-xs text-text-muted">
+          Dans les deux cas, l&apos;agent lit le profil du prospect et personnalise chaque message a partir d&apos;un element reel. Ce qui change, c&apos;est la facon d&apos;ouvrir.
         </p>
         <div className="space-y-3">
-          {(Object.entries(STRUCTURE_MESSAGE_LABELS) as [StructureMessage, { title: string; description: string }][]).map(
-            ([key, { title, description }]) => (
+          {(Object.entries(STRUCTURE_MESSAGE_LABELS) as [StructureMessage, { title: string; description: string; example: string }][]).map(
+            ([key, { title, description, example }]) => (
               <button
                 key={key}
                 type="button"
@@ -361,8 +364,19 @@ export default function AgentWizard({
                 }}
                 className="w-full rounded-lg border border-accent/30 bg-accent/10 p-4 text-left transition-colors hover:border-accent/50"
               >
-                <p className="text-sm font-semibold text-foreground">{title}</p>
-                <p className="mt-0.5 text-xs text-text-muted">{description}</p>
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-sm font-semibold text-foreground">{title}</p>
+                  <div className="group relative shrink-0">
+                    <span className="flex h-4 w-4 cursor-default items-center justify-center rounded-full border border-text-dim text-[10px] text-text-dim">
+                      i
+                    </span>
+                    <div className="pointer-events-none absolute right-0 top-5 z-10 w-72 rounded-md border border-border bg-panel-raised px-3 py-2 text-xs text-text-muted opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
+                      <p className="mb-1 font-medium text-foreground">Exemple :</p>
+                      <p className="italic">&ldquo;{example}&rdquo;</p>
+                    </div>
+                  </div>
+                </div>
+                <p className="mt-1 text-xs text-text-muted">{description}</p>
               </button>
             )
           )}
@@ -401,7 +415,7 @@ export default function AgentWizard({
 
   // --- ECRAN FORMULAIRE COURT "PREMIER MESSAGE" (icebreaker / invitation recue) ---
   if (step === "fm_form" && (agentType === "icebreaker" || agentType === "invitation_recue")) {
-    const typeLabel = agentType === "icebreaker" ? "Icebreaker" : "Invitation recue";
+    const typeLabel = agentType === "icebreaker" ? "Prise de contact" : "Invitation reçue";
     return (
       <div className="space-y-4">
         <div className="rounded-md border border-accent/30 bg-accent/10 px-3 py-2 text-xs text-foreground">
@@ -452,9 +466,26 @@ export default function AgentWizard({
           required
           value={fmForm.businessDescription}
           onChange={(v) => updateFmField("businessDescription", v)}
-          placeholder="Explique ton activite en quelques lignes : ce que tu fais, depuis quand, pour qui. Ce contexte ne sera mentionne que si c'est tres naturel : le premier message ne doit pas vendre quoi que ce soit."
+          placeholder="Explique ton activite, ce que tu fais et pour qui. L'agent s'en sert pour se situer, jamais pour en faire un argumentaire de vente."
           rows={4}
         />
+        {agentType === "icebreaker" && fmForm.structureMessage === "proposition_directe" && (
+          <TextAreaField
+            label="Ce que l'agent propose"
+            value={fmForm.cta}
+            onChange={(v) => updateFmField("cta", v)}
+            placeholder="L'invitation à faible engagement que l'agent proposera au prospect. Ex : un échange de quinze minutes, une invitation à un petit-déjeuner découverte, un audit offert. Reste léger, jamais un argumentaire de vente."
+            rows={2}
+          />
+        )}
+        {agentType === "icebreaker" && (
+          <Field
+            label="Lien de ton objectif (optionnel)"
+            value={fmForm.ctaUrl}
+            onChange={(v) => updateFmField("ctaUrl", v)}
+            placeholder="https://calendly.com/... ou lien d'inscription webinaire"
+          />
+        )}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label className="mb-1 block text-sm font-medium text-text-muted">Ton de l&apos;agent</label>
@@ -474,7 +505,7 @@ export default function AgentWizard({
               onChange={(e) => updateFmField("styleDecontracte", e.target.value === "decontracte")}
               className="w-full rounded-md border border-border-strong bg-panel-raised px-3 py-2 text-sm text-foreground focus:border-accent focus:outline-none"
             >
-              <option value="decontracte">Decontracte</option>
+              <option value="decontracte">Décontracté</option>
               <option value="formel">Formel</option>
             </select>
           </div>
@@ -518,7 +549,7 @@ export default function AgentWizard({
               onClick={() => setStep("fm_generating")}
               className="rounded-md border border-accent/30 bg-accent/10 px-4 py-2 text-sm font-medium text-accent transition-colors hover:bg-accent/20 disabled:opacity-50"
             >
-              Generer le prompt
+              Générer le prompt
             </button>
           </div>
         </div>
@@ -556,7 +587,7 @@ export default function AgentWizard({
             onChange={(e) => setFmAgentName(e.target.value)}
             required
             className="w-full rounded-md border border-border-strong bg-panel-raised px-3 py-2 text-sm text-foreground focus:border-accent focus:outline-none"
-            placeholder={agentType === "icebreaker" ? "Ex: Icebreaker principal" : "Ex: Remerciement invitation recue"}
+            placeholder={agentType === "icebreaker" ? "Ex: Prise de contact 1" : "Ex: Remerciement invitation reçue"}
           />
         </div>
         <div className="mb-4">
@@ -651,7 +682,7 @@ export default function AgentWizard({
             onChange={(e) => setAgentName(e.target.value)}
             required
             className="w-full rounded-md border border-border-strong bg-panel-raised px-3 py-2 text-sm text-foreground focus:border-accent focus:outline-none"
-            placeholder="Ex: Setter LinkedIn principal"
+            placeholder="Ex: Prospection dirigeants TPE"
           />
         </div>
         <div className="mb-4">
@@ -964,7 +995,7 @@ export default function AgentWizard({
                 onChange={(e) => updateField("styleDecontracte", e.target.value === "decontracte")}
                 className="w-full rounded-md border border-border-strong bg-panel-raised px-3 py-2 text-sm text-foreground focus:border-accent focus:outline-none"
               >
-                <option value="decontracte">Decontracte (ex: &quot;t&apos;as ?&quot;)</option>
+                <option value="decontracte">Décontracté (ex : &quot;t&apos;as ?&quot;)</option>
                 <option value="formel">Formel (ex: &quot;as-tu ?&quot;)</option>
               </select>
             </div>
@@ -1054,7 +1085,7 @@ export default function AgentWizard({
               onClick={handleGenerate}
               className="rounded-md border border-accent/30 bg-accent/10 px-4 py-2 text-sm font-medium text-accent transition-colors hover:bg-accent/20 disabled:opacity-50"
             >
-              Generer le prompt
+              Générer le prompt
             </button>
           )}
         </div>
@@ -1068,7 +1099,7 @@ export default function AgentWizard({
         ) : (
           <TestFirstMessageModal
             agent={{ id: "test", name: testingAgent.name, prompt_content: testingAgent.prompt_content }}
-            agentTypeLabel={testingAgent.agentType === "icebreaker" ? "Icebreaker" : "Invitation recue"}
+            agentTypeLabel={testingAgent.agentType === "icebreaker" ? "Prise de contact" : "Invitation reçue"}
             onClose={() => setTestingAgent(null)}
           />
         )

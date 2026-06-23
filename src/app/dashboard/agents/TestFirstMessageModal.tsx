@@ -38,7 +38,7 @@ export default function TestFirstMessageModal({
 
   async function handleGenerate() {
     if (!agent.prompt_content) {
-      setError("Cet agent n'a pas de prompt configure.");
+      setError("Cet agent n'a pas de prompt configuré.");
       return;
     }
     if (!firstName.trim() && !headline.trim()) {
@@ -58,7 +58,7 @@ export default function TestFirstMessageModal({
     });
 
     if (result.error || !result.reply) {
-      setError(result.error ?? "Reponse vide");
+      setError(result.error ?? "Réponse vide");
     } else {
       setRawReply(result.reply);
       setParsed(parseReply(result.reply));
@@ -85,7 +85,7 @@ export default function TestFirstMessageModal({
               Tester {agent.name ?? "l&apos;agent"}
             </h2>
             <p className="mt-0.5 text-xs text-text-muted">
-              Agent {agentTypeLabel}. Simulation : rien n&apos;est envoye.
+              Agent {agentTypeLabel}. Simulation : rien n&apos;est envoyé.
             </p>
           </div>
           <button
@@ -128,7 +128,7 @@ export default function TestFirstMessageModal({
 
             <div>
               <label className={labelClass}>
-                A-propos{" "}
+                À propos{" "}
                 <span className="text-text-muted/60">(optionnel)</span>
               </label>
               <textarea
@@ -149,7 +149,7 @@ export default function TestFirstMessageModal({
             disabled={loading}
             className="mt-4 w-full rounded-md border border-accent/30 bg-accent/10 px-4 py-2 text-sm font-medium text-accent transition-colors hover:bg-accent/20 disabled:opacity-50"
           >
-            {loading ? "Generation en cours..." : "Generer le message"}
+            {loading ? "Génération en cours..." : "Générer le message"}
           </button>
 
           {error && (
@@ -171,7 +171,7 @@ export default function TestFirstMessageModal({
                   </div>
                 ) : (
                   <>
-                    <p className="text-xs font-medium text-text-muted">Message genere</p>
+                    <p className="text-xs font-medium text-text-muted">Message généré</p>
                     <div className="rounded-2xl rounded-bl-sm border border-border bg-panel-raised px-4 py-2.5">
                       <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">
                         {parsed.message}
@@ -188,7 +188,7 @@ export default function TestFirstMessageModal({
               ) : (
                 // JSON invalide : afficher le brut directement comme message
                 <>
-                  <p className="text-xs font-medium text-text-muted">Message genere</p>
+                  <p className="text-xs font-medium text-text-muted">Message généré</p>
                   <div className="rounded-2xl rounded-bl-sm border border-border bg-panel-raised px-4 py-2.5">
                     <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">
                       {rawReply}

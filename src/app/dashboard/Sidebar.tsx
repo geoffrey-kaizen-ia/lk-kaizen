@@ -54,7 +54,7 @@ const NAV_ITEMS = [
   },
   {
     href: "/dashboard/settings",
-    label: "Reglages",
+    label: "Réglages",
     icon: (
       <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
@@ -90,7 +90,7 @@ export default function Sidebar({
     const { data: userData } = await supabase.auth.getUser();
     const userId = userData.user?.id;
     if (!userId) {
-      setAiError("Session expiree, recharge la page.");
+      setAiError("Session expirée, recharge la page.");
       setTogglingAi(false);
       return;
     }
@@ -196,13 +196,13 @@ export default function Sidebar({
                 aiActive ? "text-text-dim" : "text-accent"
               }`}
             >
-              {aiActive ? "Desactiver" : "Reactiver"}
+              {aiActive ? "Désactiver" : "Réactiver"}
             </span>
           </button>
           <p className="mt-1.5 text-[10px] leading-snug text-text-dim">
             {aiActive
-              ? "Coupe les reponses automatiques sur toutes les conversations en une fois."
-              : "Aucune conversation ne recoit de reponse automatique pour le moment."}
+              ? "Coupe les réponses automatiques sur toutes les conversations en une fois."
+              : "Aucune conversation ne reçoit de réponse automatique pour le moment."}
           </p>
           {aiError && (
             <p className="mt-1.5 text-[10px] leading-snug text-danger">
@@ -267,7 +267,7 @@ export default function Sidebar({
                   type="submit"
                   className="w-full px-4 py-2 text-left text-sm text-foreground transition-colors hover:bg-panel"
                 >
-                  Deconnexion
+                  Déconnexion
                 </button>
               </form>
             </div>

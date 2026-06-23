@@ -7,6 +7,8 @@ export type FirstMessageFormData = {
   businessDescription: string;
   sujetLegitimite: string;
   structureMessage: StructureMessage;
+  cta: string;
+  ctaUrl: string;
   tutoiement: boolean;
   styleDecontracte: boolean;
   styleExamples: string[];
@@ -19,6 +21,8 @@ export const EMPTY_FIRST_MESSAGE_FORM: FirstMessageFormData = {
   businessDescription: "",
   sujetLegitimite: "",
   structureMessage: "diagnostic",
+  cta: "",
+  ctaUrl: "",
   tutoiement: true,
   styleDecontracte: true,
   styleExamples: [],
@@ -27,25 +31,29 @@ export const EMPTY_FIRST_MESSAGE_FORM: FirstMessageFormData = {
 
 export const STRUCTURE_MESSAGE_LABELS: Record<
   StructureMessage,
-  { title: string; description: string }
+  { title: string; description: string; example: string }
 > = {
   diagnostic: {
-    title: "Agent diagnostic",
+    title: "Agent diagnostic — ouvre par une question",
     description:
-      "L'agent pose une question ouverte sur un sujet ou tu es legitime. Il amorce la conversation, tu reprends la main des la premiere reponse du prospect.",
+      "Après l'accroche personnalisée, l'agent pose une vraie question sur ton terrain d'expertise, sans rien proposer ni vendre. Le prospect réagit de lui-même, et tu reprends la main dès sa première réponse. L'approche sûre par défaut : tu ne brusques personne et tu vois qui s'intéresse avant d'engager.",
+    example:
+      "Bonjour Camille, j'ai trouvé très juste votre publication sur la tarification au juste prix dans le podcast Inde. Comment vous abordez la prospection de votre côté, c'est quelque chose que vous avez rodé ou que vous faites au gré des occasions ?",
   },
   proposition_directe: {
-    title: "Agent proposition directe",
+    title: "Agent proposition directe — propose ton invitation d'emblée",
     description:
-      "L'agent se presente brievement et propose un echange court des le premier message. L'humain reprend sur reponse positive.",
+      "Après la même accroche personnalisée, l'agent se présente en une phrase et propose l'invitation que tu as définie : un échange, un petit-déjeuner découverte, un audit. Le tri va vite, le prospect dit oui ou non, et tu reprends la main sur un oui. À choisir quand ta cible reconnaît déjà son besoin ou répond bien aux approches franches.",
+    example:
+      "Bonjour Camille, j'ai trouvé très juste votre publication sur la tarification au juste prix dans le podcast Inde. J'accompagne justement des consultants sur leur prospection régulière. Ça vous dirait qu'on prenne quinze minutes pour voir comment vous vous y prenez aujourd'hui ?",
   },
 };
 
 export const FIRST_MESSAGE_OBJECTIF: Record<FirstMessageAgentType, string> = {
   icebreaker:
-    "Premier message envoye automatiquement apres acceptation de votre invitation",
+    "Premier message envoyé automatiquement après acceptation de ton invitation",
   invitation_recue:
-    "Message de remerciement envoye automatiquement quand un prospect vous invite et que vous acceptez",
+    "Message de remerciement envoyé automatiquement quand un prospect t'invite et que tu acceptes",
 };
 
 // --- Builder V1.3 pour icebreaker (mode diagnostic ou proposition directe) ---
@@ -70,13 +78,18 @@ function buildIcebreakerPromptContent(data: FirstMessageFormData): string {
         .join("\n")}`
     : "";
 
+  const ctaPhrase =
+    data.cta && data.cta.trim()
+      ? data.cta.trim()
+      : "un echange court et exploratoire pour comprendre comment le prospect gere ce sujet aujourd'hui";
+
   const mouvement2 =
     mode === "diagnostic"
       ? `Tu ouvres une seule question sur le terrain de ${data.sujetLegitimite}, et tu ajustes sa forme aux signaux du profil, sur un spectre.
 - Si rien n'indique de difficulte, tu poses une question ouverte et sans presomption sur la facon dont le prospect gere ce sujet aujourd'hui.
 - Si une tension est reellement visible ou exprimee par le prospect lui-meme, tu peux poser une question plus pointue, qui laisse toujours une porte de sortie honorable.
 Tu ne presumes jamais la douleur de quelqu'un qui maitrise visiblement son sujet. Un signe de reussite ou de croissance n'est pas une douleur, ne le traite jamais comme tel. La forme pointue ne se justifie que sur une tension que les donnees montrent vraiment. Tu ne proposes pas de rendez-vous, pas de lien, pas d'offre. C'est la reponse du prospect qui triera l'interet, et ${data.userName} enchainera ensuite.`
-      : `Tu ajoutes deux choses, dans l'ordre. D'abord un pont bref, qui est ${data.userName} et ce qu'il fait, en une phrase, sans aucune tournure publicitaire. Ensuite une proposition d'echange a faible engagement sur le terrain de ${data.sujetLegitimite}, un echange court et exploratoire pour comprendre comment le prospect gere ce sujet aujourd'hui. L'allegement vient du contenu de la demande, court, exploratoire et precis, jamais d'un disclaimer du type "sans rien vous vendre" qui eveille le soupcon. Tu ne pitches pas, tu ne mets pas de lien ni de prix, tu ne forces pas le rendez-vous.`;
+      : `Tu ajoutes deux choses, dans l'ordre. D'abord un pont bref, qui est ${data.userName} et ce qu'il fait, en une phrase, sans aucune tournure publicitaire. Ensuite une proposition a faible engagement : ${ctaPhrase}. L'allegement vient du contenu de la demande, court, exploratoire et precis, jamais d'un disclaimer du type "sans rien vous vendre" qui eveille le soupcon. Tu ne pitches pas, tu ne mets pas de lien ni de prix, tu ne forces pas le rendez-vous.`;
 
   const additionalBlock = data.additionalInstructions.trim()
     ? `\n\n<instructions_supplementaires>\nPrioritaires si elles entrent en conflit avec ce qui precede.\n${data.additionalInstructions.trim()}\n</instructions_supplementaires>`
