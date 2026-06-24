@@ -37,6 +37,12 @@ const STATUS_LABELS: Record<string, string> = {
 export default function StatsClient({
   period,
   status,
+  totalInvitesSent,
+  totalMessagesSent,
+  totalAccepted,
+  acceptanceRate,
+  totalReplied,
+  replyRate,
   totalSent,
   totalReplies,
   globalRate,
@@ -49,6 +55,12 @@ export default function StatsClient({
 }: {
   period: string;
   status: string;
+  totalInvitesSent: number;
+  totalMessagesSent: number;
+  totalAccepted: number;
+  acceptanceRate: number;
+  totalReplied: number;
+  replyRate: number;
   totalSent: number;
   totalReplies: number;
   globalRate: number;
@@ -113,28 +125,54 @@ export default function StatsClient({
         </select>
       </div>
 
-      {/* Cartes de stats globales */}
-      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard
-          label="Total envoyes"
-          value={totalSent.toString()}
-          accent="accent"
-        />
-        <StatCard
-          label="Total reponses"
-          value={totalReplies.toString()}
-          accent="positive"
-        />
-        <StatCard
-          label="Taux global"
-          value={`${globalRate.toFixed(1)}%`}
-          accent="warning"
-        />
-        <StatCard
-          label="Interesses"
-          value={totalInterested.toString()}
-          accent="muted"
-        />
+      {/* Résultats */}
+      <div className="mb-2">
+        <p className="mb-3 font-display text-xs font-semibold uppercase tracking-[0.2em] text-text-dim">
+          Resultats
+        </p>
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          <StatCard
+            label="Invitations acceptees"
+            value={totalAccepted.toString()}
+            accent="positive"
+          />
+          <StatCard
+            label="Taux d'acceptation"
+            value={`${acceptanceRate.toFixed(1)}%`}
+            accent="positive"
+          />
+          <StatCard
+            label="Messages répondus"
+            value={totalReplied.toString()}
+            accent="accent"
+          />
+          <StatCard
+            label="Taux de réponse"
+            value={`${replyRate.toFixed(1)}%`}
+            accent="accent"
+          />
+        </div>
+      </div>
+
+      {/* Actions envoyées */}
+      <div className="mb-6 mt-5">
+        <p className="mb-3 font-display text-xs font-semibold uppercase tracking-[0.2em] text-text-dim">
+          Actions envoyees
+        </p>
+        <div className="grid grid-cols-2 gap-4">
+          <StatCard
+            label="Invitations envoyées"
+            value={totalInvitesSent.toString()}
+            accent="muted"
+            small
+          />
+          <StatCard
+            label="Messages envoyés"
+            value={totalMessagesSent.toString()}
+            accent="muted"
+            small
+          />
+        </div>
       </div>
 
       {/* Graphique messages recus / envoyes */}
@@ -313,19 +351,21 @@ function StatCard({
   label,
   value,
   accent,
+  small = false,
 }: {
   label: string;
   value: string;
   accent: keyof typeof ACCENT_STYLES;
+  small?: boolean;
 }) {
   const style = ACCENT_STYLES[accent];
   return (
-    <div className="relative overflow-hidden rounded-lg border border-border bg-panel px-5 py-6 text-center">
+    <div className="relative overflow-hidden rounded-lg border border-border bg-panel px-5 py-5 text-center">
       <span className={`absolute inset-x-0 top-0 h-0.5 ${style.bar}`} />
-      <p className="mb-3 font-display text-xs font-medium uppercase tracking-[0.2em] text-text-dim">
+      <p className="mb-2 font-display text-xs font-medium uppercase tracking-[0.2em] text-text-dim">
         {label}
       </p>
-      <p className={`font-display text-4xl font-semibold tabular-nums ${style.text} ${style.glow}`}>
+      <p className={`font-display tabular-nums ${small ? "text-2xl font-medium text-text-muted" : `text-4xl font-semibold ${style.text} ${style.glow}`}`}>
         {value}
       </p>
     </div>

@@ -218,6 +218,111 @@ export async function testFirstMessage(input: TestFirstMessageInput) {
   }
 }
 
+// Scrape un vrai profil LinkedIn via Unipile pour pre-remplir le formulaire de test.
+// Le public_identifier est extrait de l'URL ou utilise directement si c'est deja un slug.
+export async function scrapeLinkedInProfile(linkedinUrl: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user?.id) return { error: "Session expiree" };
+
+  const { data: config } = await supabase
+    .from("lk_clients_config")
+    .select("account_id")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  const accountId = config?.account_id;
+  if (!accountId) return { error: "Compte LinkedIn non configure" };
+
+  const match = linkedinUrl.match(/linkedin\.com\/in\/([^/?#]+)/);
+  const identifier = (match?.[1] ?? linkedinUrl).replace(/\/$/, "").trim();
+  if (!identifier) return { error: "URL LinkedIn invalide" };
+
+  const baseUrl = process.env.UNIPILE_BASE_URL;
+  const apiKey = process.env.UNIPILE_API_KEY;
+  if (!baseUrl || !apiKey) return { error: "Configuration Unipile manquante (UNIPILE_BASE_URL / UNIPILE_API_KEY)" };
+
+  const authHeaders = { "X-API-KEY": apiKey, Accept: "application/json" };
+
+  // 1) Profil : GET /api/v1/users/{identifier}. L'identifier accepte le public_identifier
+  // (slug "prenom-nom") ou le provider id.
+  try {
+    const res = await fetch(
+      `${baseUrl}/api/v1/users/${encodeURIComponent(identifier)}?account_id=${accountId}`,
+      { headers: authHeaders, cache: "no-store" }
+    );
+
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      return { error: `Unipile ${res.status}${body ? ` — ${body.slice(0, 200)}` : ""}` };
+    }
+
+    const profile = await res.json();
+    const firstName =
+      profile.first_name ??
+      (typeof profile.name === "string" ? profile.name.split(" ")[0] : "") ??
+      "";
+
+    // Assemble un "a-propos" riche a partir des sections du profil.
+    const aboutParts: string[] = [];
+    const summary = (profile.summary ?? profile.about ?? "").trim();
+    if (summary) aboutParts.push(summary);
+
+    if (profile.location) aboutParts.push(`Localisation : ${profile.location}`);
+
+    // Experiences (work_experience selon le schema Unipile profil complet).
+    const experiences = profile.work_experience ?? profile.experience ?? [];
+    if (Array.isArray(experiences) && experiences.length > 0) {
+      const lines = experiences
+        .slice(0, 3)
+        .map((e: Record<string, unknown>) => {
+          const role = (e.position ?? e.role ?? e.title ?? "") as string;
+          const company = (e.company ?? e.company_name ?? "") as string;
+          return [role, company].filter(Boolean).join(" @ ");
+        })
+        .filter(Boolean);
+      if (lines.length) aboutParts.push(`Experiences :\n- ${lines.join("\n- ")}`);
+    }
+
+    // 2) Derniers posts : GET /api/v1/users/{provider_id}/posts. Necessite l'id interne
+    // (provider_id), pas le slug. On l'extrait du profil.
+    const providerId = profile.provider_id ?? profile.id ?? null;
+    if (providerId) {
+      try {
+        const postsRes = await fetch(
+          `${baseUrl}/api/v1/users/${encodeURIComponent(String(providerId))}/posts?account_id=${accountId}&limit=5`,
+          { headers: authHeaders, cache: "no-store" }
+        );
+        if (postsRes.ok) {
+          const postsData = await postsRes.json();
+          const items = Array.isArray(postsData?.items) ? postsData.items : [];
+          const texts = items
+            .map((p: Record<string, unknown>) => (p.text as string)?.trim())
+            .filter((t: string) => t && t.length > 0)
+            .slice(0, 3)
+            .map((t: string) => (t.length > 280 ? t.slice(0, 280) + "..." : t));
+          if (texts.length) {
+            aboutParts.push(`Derniers posts :\n- ${texts.join("\n- ")}`);
+          }
+        }
+      } catch {
+        // Posts optionnels : on ignore une erreur ici, le profil seul reste exploitable.
+      }
+    }
+
+    return {
+      firstName: firstName.trim(),
+      headline: (profile.headline ?? "").trim(),
+      about: aboutParts.join("\n\n"),
+      error: null,
+    };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Erreur inconnue" };
+  }
+}
+
 export async function removeAssignment(role: string) {
   const supabase = await createClient();
   const accountId = await getAccountId();

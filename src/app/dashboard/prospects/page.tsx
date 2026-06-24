@@ -36,10 +36,10 @@ export default async function ProspectsPage() {
       .limit(500),
     supabase
       .from("lk_search_results")
-      .select("id, search_id, provider_id, full_name, headline, location, industry, current_company, status, created_at")
+      .select("id, search_id, provider_id, full_name, headline, location, industry, current_company, status, created_at, sent_at")
       .eq("status", "invited")
       .order("created_at", { ascending: false })
-      .limit(500),
+      .limit(30),
     supabase
       .from("lk_search_results")
       .select("*", { count: "exact", head: true })

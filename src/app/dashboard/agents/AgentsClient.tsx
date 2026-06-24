@@ -816,9 +816,6 @@ export default function AgentsClient({
       {wizardOpen && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setWizardOpen(false);
-          }}
         >
           <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-lg border border-border bg-panel p-6 shadow-xl">
             <div className="mb-5 flex items-center justify-between">
@@ -853,9 +850,6 @@ export default function AgentsClient({
       {modalOpen && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setModalOpen(false);
-          }}
         >
           <div className="w-full max-w-lg rounded-lg border border-border bg-panel p-6 shadow-xl">
             <div className="mb-5 flex items-center justify-between">

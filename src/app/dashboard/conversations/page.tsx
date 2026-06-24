@@ -10,26 +10,22 @@ export default async function ConversationsPage() {
       .select(
         "id, full_name, status, message_count, created_at, ai_enabled, linkedin_url, occupation"
       )
-      .gt("message_count", 0),
+      .not("last_message_sent_at", "is", null),
     supabase
-      .from("lk_messages")
-      .select("prospect_id, content, sent_at, direction")
-      .order("sent_at", { ascending: false }),
+      .from("lk_last_messages")
+      .select("prospect_id, content, sent_at, direction"),
   ]);
 
-  // Derniere message par prospect (la liste est deja triee desc)
   const lastMessageMap = new Map<
     string,
     { content: string; sent_at: string; direction: string }
   >();
   for (const msg of lastMessages ?? []) {
-    if (!lastMessageMap.has(msg.prospect_id)) {
-      lastMessageMap.set(msg.prospect_id, {
-        content: msg.content,
-        sent_at: msg.sent_at,
-        direction: msg.direction,
-      });
-    }
+    lastMessageMap.set(msg.prospect_id, {
+      content: msg.content,
+      sent_at: msg.sent_at,
+      direction: msg.direction,
+    });
   }
 
   const prospectsWithPreview = (prospects ?? [])

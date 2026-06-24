@@ -74,7 +74,7 @@ export async function createCampaign(formData: FormData) {
       keywords,
       location: location || "",
       network_distance: networkDistance || "",
-      max_results: 50,
+      max_results: targetCount,
       auto_invite: mode === "auto",
       industry: industry || "",
       exclude_titles: excludeTitles,
@@ -160,6 +160,22 @@ export async function ignoreSelectedIds(ids: string[]) {
     .from("lk_search_results")
     .update({ status: "ignored" })
     .in("id", ids);
+  if (error) return { error: error.message };
+  revalidatePath("/dashboard/prospects");
+  return { error: null };
+}
+
+export async function renameCampaign(id: string, name: string) {
+  const trimmed = name.trim();
+  if (!trimmed) return { error: "Le nom ne peut pas être vide." };
+  const accountId = await getAccountId();
+  if (!accountId) return { error: "Compte non configuré." };
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("lk_searches")
+    .update({ name: trimmed })
+    .eq("id", id)
+    .eq("account_id", accountId);
   if (error) return { error: error.message };
   revalidatePath("/dashboard/prospects");
   return { error: null };

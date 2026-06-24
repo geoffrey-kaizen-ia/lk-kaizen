@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { testFirstMessage } from "./actions";
+import { testFirstMessage, scrapeLinkedInProfile } from "./actions";
 
 type ParsedReply = {
   message: string;
@@ -27,6 +27,10 @@ export default function TestFirstMessageModal({
   agentTypeLabel: string;
   onClose: () => void;
 }) {
+  const [linkedinUrl, setLinkedinUrl] = useState("");
+  const [scraping, setScraping] = useState(false);
+  const [scrapeError, setScrapeError] = useState<string | null>(null);
+
   const [firstName, setFirstName] = useState("");
   const [headline, setHeadline] = useState("");
   const [about, setAbout] = useState("");
@@ -35,6 +39,21 @@ export default function TestFirstMessageModal({
   const [parsed, setParsed] = useState<ParsedReply>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  async function handleScrape() {
+    if (!linkedinUrl.trim()) return;
+    setScraping(true);
+    setScrapeError(null);
+    const result = await scrapeLinkedInProfile(linkedinUrl.trim());
+    if (result.error) {
+      setScrapeError(result.error);
+    } else {
+      if (result.firstName) setFirstName(result.firstName);
+      if (result.headline) setHeadline(result.headline);
+      if (result.about) setAbout(result.about);
+    }
+    setScraping(false);
+  }
 
   async function handleGenerate() {
     if (!agent.prompt_content) {
@@ -98,9 +117,36 @@ export default function TestFirstMessageModal({
         </div>
 
         <div className="overflow-y-auto px-5 py-4">
-          <p className="mb-4 text-sm text-text-muted">
-            Decris le prospect. Seul le prenom ou le headline est requis -- l&apos;agent compose
-            avec ce qu&apos;il a.
+          {/* Chargement depuis un vrai profil LinkedIn */}
+          <div className="mb-4 rounded-md border border-border bg-panel-raised px-3 py-3">
+            <p className="mb-2 text-xs font-medium text-text-muted">Charger un vrai profil</p>
+            <div className="flex gap-2">
+              <input
+                value={linkedinUrl}
+                onChange={(e) => {
+                  setLinkedinUrl(e.target.value);
+                  setScrapeError(null);
+                }}
+                onKeyDown={(e) => { if (e.key === "Enter") handleScrape(); }}
+                placeholder="https://linkedin.com/in/prenom-nom"
+                className="flex-1 rounded-md border border-border-strong bg-panel px-2.5 py-1.5 text-xs text-foreground focus:border-accent focus:outline-none"
+              />
+              <button
+                type="button"
+                onClick={handleScrape}
+                disabled={scraping || !linkedinUrl.trim()}
+                className="shrink-0 rounded-md border border-accent/30 bg-accent/10 px-3 py-1.5 text-xs font-medium text-accent transition-colors hover:bg-accent/20 disabled:opacity-50"
+              >
+                {scraping ? "..." : "Charger"}
+              </button>
+            </div>
+            {scrapeError && (
+              <p className="mt-1.5 text-xs text-danger">{scrapeError}</p>
+            )}
+          </div>
+
+          <p className="mb-3 text-sm text-text-muted">
+            Ou renseigne le profil manuellement. Seul le prenom ou le headline est requis.
           </p>
 
           <div className="space-y-3">

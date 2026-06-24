@@ -3,6 +3,93 @@
 Journal chronologique des sessions de travail. Le plus recent en haut.
 Pour la vue d'ensemble par phases, voir [ROADMAP.md](./ROADMAP.md).
 
+## 2026-06-24 — Fix noeud Code workflow Icebreaker (n8n)
+
+- Crash diagnostiqué : `SyntaxError: Unexpected token 'e', "event=new_"... is not valid JSON` dans le noeud Code du workflow Icebreaker (`0yQOYs1Ffiqtj4IX`).
+- Cause racine : le noeud Code avait été écrit quand Unipile envoyait du `application/x-www-form-urlencoded`. Il reconstituait `event=new_relation&...` pour le `JSON.parse()`. Unipile envoie maintenant du JSON natif, n8n parse le body automatiquement — le `JSON.parse()` planté sur un objet déjà parsé.
+- Fix : remplacer tout le code de reconstruction par `return $input.all().map(item => ({ json: item.json.body }));` — aplatit `body` à la racine sans reconstruction inutile.
+
+---
+
+## 2026-06-24 — Bugfixes UX : modals + slider cadence
+
+### Modals non-fermables par clic extérieur
+
+- `AgentsClient.tsx` : suppression du `onClick` backdrop sur le wizard de création et la modal de formulaire — la fermeture se fait uniquement via "Enregistrer" ou "Annuler".
+- `ProspectsClient.tsx` : même correction sur la modal "Nouvelle campagne" + nettoyage du `stopPropagation` devenu inutile sur l'inner div.
+
+### Fix slider cadence quotidienne
+
+- Cause racine : `SOCLE_MAX_INVITE_LIMIT = 20` (code) mais fallback page serveur à `25`. L'état s'initialisait au-dessus du max du slider → thumb bloqué visuellement à 100%, snap à 20 au premier toucher.
+- Fix dans `SettingsClient.tsx` : clampage des valeurs initiales avec `Math.min(dailyInviteLimit, SOCLE_MAX_INVITE_LIMIT)` et `Math.min(dailyMessageLimit, SOCLE_MAX_MESSAGE_LIMIT)`.
+
+---
+
+## 2026-06-24 — Onboarding : URL prod + code d'accès
+
+- Confirmé : le code d'accès inscription (`SIGNUP_ACCESS_CODE`) est `kaizen2024`.
+- Confirmé : le projet Vercel actif s'appelle `saas-kaizen` (ancienne URL `lk-kaizen.vercel.app` obsolète).
+- Bug onboarding : après validation Unipile hosted-auth, les `success_redirect_url` et `failure_redirect_url` pointaient sur `localhost:3000` (hardcodés dans le workflow n8n). Corrigé en remplaçant par `https://saas-kaizen.vercel.app/dashboard/agents?linkedin=ok` (et `?linkedin=error`).
+
+---
+
+## 2026-06-23 — Icebreaker en file d'attente (cron) + finalisation point 9
+
+### Point 9 finalisé (test agent sur vrai profil)
+
+- `scrapeLinkedInProfile` corrigé sur le bon endpoint Unipile (`GET /api/v1/users/{identifier}`), logs debug retirés. Point 9 déclaré terminé et validé.
+
+### Icebreaker : passage en file d'attente comme le WF Conversation (n8n)
+
+- Décision validée : l'Icebreaker (`0yQOYs1Ffiqtj4IX`) ne doit plus envoyer en direct via un nœud Wait live (anti-pattern), mais mettre en file et laisser un cron envoyer dans le créneau client. Construit pas à pas dans l'UI n8n (Nicolas), pas via SDK.
+- **Flux webhook (modifié)** : `Switch → message → [NEW] Code - Calcul timing → Supabase - Creer prospect`. Le nœud timing (même code que Conversation) calcule `scheduled_send_at` avec recalage sur active_hours/active_days/timezone. Le prospect est créé en `status='connected'`, `pending_reply=message`, `scheduled_send_at`, `ai_enabled=true`, `message_count=0`, SANS chat_id. Nœuds retirés : `Wait - Delai humain`, `Unipile - Envoyer icebreaker`, `Supabase - Enregistrer message`.
+- **Flux cron (nouveau, 5 min, désactivé jusqu'au test)** : `Schedule → Get prospects à envoyer (status=connected, scheduled_send_at<=now, ai_enabled) → IF pending_reply non vide → Loop Over Items (batch 1) → Unipile POST /chats/ (attendees_ids=linkedin_id) → Enregistrer message (lk_messages, message_type=icebreaker) → Update prospect (chat_id réel, in_conversation, message_count=1, vide pending/scheduled) → Wait 30s → reboucle`.
+- Bonus : corrige le bug existant où l'Icebreaker stockait `message_id` à la place du `chat_id` (cassait le matching des réponses).
+- Pas de plafond de messages sur l'icebreaker (consigne Nicolas) ; le créneau est encodé une fois dans `scheduled_send_at`, le cron compare juste `<= now` (pas de formule en base).
+- Points ouverts : (1) vérifier au run que la réponse Unipile `POST /chats/` expose bien `chat_id` et `message_id` ; (2) Test A à faire (insérer 1 ligne de test Nicolas→Geoffrey, filtre `account_id` temporaire sur Get, run manuel) avant d'activer le Schedule ; (3) il faut le `provider_id` LinkedIn de Geoffrey pour la ligne de test.
+
+---
+
+## 2026-06-23 — Rapport quotidien : exploration connected_at
+
+### Analyse colonne connected_at
+
+- Question : peut-on savoir qui a accepté une invitation aujourd'hui pour créer un rapport quotidien ?
+- Constaté : la colonne `connected_at` existe déjà sur `lk_prospects` mais n'est jamais alimentée (0 valeur non-nulle).
+- Constaté : account_id de Nicolas en mémoire (`fhBcmJdARp2_Du62_6F1xg`) est périmé — le bon est `rsZrC9jYS3am3poE-AZsMg` (email djteks@gmail.com). Mémoire à mettre à jour.
+- Point ouvert : le workflow n8n Icebreaker ne setté pas `connected_at` lors du traitement du webhook `new_relation` — à ajouter pour avoir un vrai rapport quotidien des connexions.
+
+---
+
+## 2026-06-23 — Corrections fiche Geoffrey + daily_report + fix relance
+
+### Corrections UI agents/réglages (fiche Geoffrey)
+
+- Socle invitations réduit de 25 à 20/jour (`SOCLE_MAX_INVITE_LIMIT` dans `delayPresets.ts`).
+- "Icebreaker" renommé "Prise de contact" partout dans l'UI (AgentsClient, AgentWizard, AdminClient, firstMessageTemplate, TestFirstMessageModal).
+- Point 6 : prompt brut masqué pour clients sans `can_edit_prompt` — remplacé par un résumé généré depuis `knowledge_base` (`buildAgentSummary`).
+- Point 8 : message fixe repositionné visuellement en option secondaire (border atténuée, label "Ou utiliser un message fixe", description explicative).
+- Point 16 : 10 templates de relance ajoutés (`RELANCE_TEMPLATES`) + sélecteur "Choisir un modèle" dans `RelanceCard`.
+- Point 19 : champ `ctaUrl` (Lien de ton objectif) ajouté au wizard icebreaker pour les 2 modes, stocké dans `knowledge_base` uniquement (jamais injecté dans le prompt).
+- Points 20/21/22 : placeholders agents mis à jour, texte bannière "Comprendre les agents" actualisé, accents corrigés sur Sidebar, AdminClient, AgentWizard, AgentsClient, TestFirstMessageModal.
+
+### Toggle rapport quotidien + fix toggle relance
+
+- Nouveau toggle "Rapport quotidien par e-mail" dans `/dashboard/settings` (section Notifications), connecté à `lk_clients_config.daily_report`. Optimistic update avec rollback sur erreur.
+
+### Test agent sur vrai profil LinkedIn (point 9, EN COURS)
+
+- Nouvelle server action `scrapeLinkedInProfile` dans `agents/actions.ts` : récupère l'`account_id` du client, extrait le slug de l'URL LinkedIn, appelle Unipile.
+- `TestFirstMessageModal` : ajout d'un bloc "Charger un vrai profil" (champ URL + bouton) qui auto-remplit prénom / headline / à-propos ; les champs manuels restent éditables.
+- Itérations endpoint Unipile : `GET /linkedin/profiles/{id}` (404) → `POST /linkedin/search` avec url (400, n'accepte que les URLs de recherche) → `GET /api/v1/users/{identifier}` (OK).
+- Enrichissement du champ "à-propos" : summary + localisation + 3 dernières expériences + 3 derniers posts (`GET /api/v1/users/{provider_id}/posts`).
+- Point ouvert : mapping des champs Unipile imparfait (summary et expériences vides, posts réduits à un lien). Logs debug temporaires ajoutés (`PROFILE KEYS` / `PROFILE RAW` / `POSTS RAW`) pour capturer la vraie structure JSON et corriger les noms de champs, puis retirer les logs.
+- Server action `updateDailyReport` ajoutée dans `settings/actions.ts`.
+- Fix `handleToggle` dans `RelanceCard` : rollback de l'état UI + affichage de l'erreur si le `UPDATE` Supabase échoue (était silencieux avant).
+- Point ouvert : `relances_enabled` sur `lk_clients_config` n'est pas câblé côté dashboard — c'est un kill-switch admin distinct de `is_active` par relance.
+
+---
+
 ## 2026-06-22 (suite — debug prompt template icebreaker)
 
 ### Corrections prompt icebreaker + modal de test

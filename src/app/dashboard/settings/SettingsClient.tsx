@@ -60,8 +60,8 @@ export default function SettingsClient({
   timezone: string;
   dailyReport: boolean;
 }) {
-  const [inviteLimit, setInviteLimit] = useState(dailyInviteLimit);
-  const [messageLimit, setMessageLimit] = useState(dailyMessageLimit);
+  const [inviteLimit, setInviteLimit] = useState(Math.min(dailyInviteLimit, SOCLE_MAX_INVITE_LIMIT));
+  const [messageLimit, setMessageLimit] = useState(Math.min(dailyMessageLimit, SOCLE_MAX_MESSAGE_LIMIT));
   const [delayMode, setDelayMode] = useState<DelayMode>(
     isDelayMode(responseDelayMode) ? responseDelayMode : "normal"
   );

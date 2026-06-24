@@ -83,14 +83,23 @@ export default async function StatsPage({
 
   const repliedProspectIds = new Set(inboundMessages.map((m) => m.prospect_id));
 
-  const totalSent = filteredProspects.length;
-  const totalReplies = filteredProspects.filter((p) =>
-    repliedProspectIds.has(p.id)
-  ).length;
-  const globalRate = totalSent > 0 ? (totalReplies / totalSent) * 100 : 0;
-  const totalInterested = filteredProspects.filter(
-    (p) => p.status === "interested"
-  ).length;
+  // Actions envoyées
+  const totalInvitesSent = filteredProspects.length;
+  const totalMessagesSent = outboundMessages.length;
+
+  // Résultats
+  const acceptedProspects = filteredProspects.filter((p) => p.status !== "invited");
+  const totalAccepted = acceptedProspects.length;
+  const acceptanceRate = totalInvitesSent > 0 ? (totalAccepted / totalInvitesSent) * 100 : 0;
+
+  const totalReplied = filteredProspects.filter((p) => repliedProspectIds.has(p.id)).length;
+  const replyRate = totalAccepted > 0 ? (totalReplied / totalAccepted) * 100 : 0;
+
+  // Compat legacy (pour les courbes)
+  const totalSent = totalInvitesSent;
+  const totalReplies = totalReplied;
+  const globalRate = acceptanceRate;
+  const totalInterested = filteredProspects.filter((p) => p.status === "interested").length;
 
   // Regroupement par periode hebdomadaire (semaine de creation du prospect)
   const periodMap = new Map<
@@ -155,6 +164,12 @@ export default async function StatsPage({
       <StatsClient
         period={period}
         status={status}
+        totalInvitesSent={totalInvitesSent}
+        totalMessagesSent={totalMessagesSent}
+        totalAccepted={totalAccepted}
+        acceptanceRate={acceptanceRate}
+        totalReplied={totalReplied}
+        replyRate={replyRate}
         totalSent={totalSent}
         totalReplies={totalReplies}
         globalRate={globalRate}

@@ -11,6 +11,7 @@ import {
   removeFromQueue,
   ignoreResult,
   ignoreSelectedIds,
+  renameCampaign,
 } from "./actions";
 
 type Campaign = {
@@ -35,6 +36,7 @@ type SearchResult = {
   current_company: string | null;
   status: string;
   created_at: string;
+  sent_at?: string | null;
 };
 
 const CAMPAIGN_STATUS: Record<string, { label: string; dot: string }> = {
@@ -100,6 +102,11 @@ export default function ProspectsClient({
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState(false);
+  const [nameValue, setNameValue] = useState("");
+  const [campaignNames, setCampaignNames] = useState<Record<string, string>>(
+    () => Object.fromEntries(campaigns.map((c) => [c.id, c.name ?? ""]))
+  );
 
   // Filtres indépendants par section
   const [filterPending, setFilterPending] = useState<string | null>(null);
@@ -110,6 +117,7 @@ export default function ProspectsClient({
   const [openQueue, setOpenQueue] = useState(true);
   const [openPending, setOpenPending] = useState(true);
   const [openInvited, setOpenInvited] = useState(false);
+  const [openArchived, setOpenArchived] = useState(false);
 
   const [campaignStatuses, setCampaignStatuses] = useState<Record<string, string>>(
     () => Object.fromEntries(campaigns.map((c) => [c.id, c.status]))
@@ -191,6 +199,28 @@ export default function ProspectsClient({
     setDetailCampaign(null);
     setShowModal(true);
     setFormError(null);
+  }
+
+  function handleStartRename(c: Campaign) {
+    setNameValue(campaignNames[c.id] ?? c.name ?? "");
+    setEditingName(true);
+  }
+
+  function handleSaveRename(id: string) {
+    const trimmed = nameValue.trim();
+    setEditingName(false);
+    if (!trimmed || trimmed === (campaignNames[id] ?? "")) return;
+    setCampaignNames((prev) => ({ ...prev, [id]: trimmed }));
+    if (detailCampaign?.id === id) {
+      setDetailCampaign((prev) => prev ? { ...prev, name: trimmed } : prev);
+    }
+    startTransition(async () => {
+      const res = await renameCampaign(id, trimmed);
+      if (res.error) {
+        setCampaignNames((prev) => ({ ...prev, [id]: detailCampaign?.name ?? "" }));
+        setActionError(res.error);
+      }
+    });
   }
 
   function handleArchive(id: string) {
@@ -368,7 +398,7 @@ export default function ProspectsClient({
               >
                 <span className={`h-2 w-2 shrink-0 rounded-full ${statusInfo.dot}`} />
                 <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
-                  {c.name ?? "Sans nom"}
+                  {campaignNames[c.id] ?? c.name ?? "Sans nom"}
                 </span>
 
                 <div className="hidden items-center gap-2 sm:flex">
@@ -376,7 +406,7 @@ export default function ProspectsClient({
                     <div className="h-1.5 rounded-full bg-accent transition-all" style={{ width: `${pct}%` }} />
                   </div>
                   <span className="whitespace-nowrap text-xs text-text-dim">
-                    {actualScraped}/{c.target_count}
+                    {Math.min(actualScraped, c.target_count)}/{c.target_count}
                   </span>
                 </div>
 
@@ -420,6 +450,59 @@ export default function ProspectsClient({
           })}
         </div>
       </section>
+
+      {/* ── Archives ───────────────────────────────────────────────────── */}
+      {campaigns.some((c) => c.status === "archived") && (
+        <section>
+          <button
+            type="button"
+            onClick={() => setOpenArchived((v) => !v)}
+            className="flex items-center gap-2 group"
+          >
+            <svg className={`h-3.5 w-3.5 text-text-dim transition-transform ${openArchived ? "rotate-90" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+            </svg>
+            <h2 className="font-display text-sm font-semibold uppercase tracking-widest text-text-dim group-hover:text-text-muted">
+              Archives ({campaigns.filter((c) => c.status === "archived").length})
+            </h2>
+          </button>
+
+          {openArchived && (
+            <div className="mt-3 space-y-2">
+              {campaigns.filter((c) => c.status === "archived").map((c) => {
+                const actualScraped = actualScrapedByCampaign[c.id] ?? 0;
+                const nInvited = invitedCountByCampaign[c.id] ?? 0;
+                return (
+                  <div
+                    key={c.id}
+                    className="flex items-center gap-3 rounded-md border border-border bg-panel px-4 py-3 opacity-60"
+                  >
+                    <span className="h-2 w-2 shrink-0 rounded-full bg-text-dim opacity-40" />
+                    <span className="min-w-0 flex-1 truncate text-sm font-medium text-text-muted">
+                      {c.name ?? "Sans nom"}
+                    </span>
+                    <div className="hidden items-center gap-3 text-xs sm:flex">
+                      <span className="text-text-dim">{Math.min(actualScraped, c.target_count)}/{c.target_count} scrapés</span>
+                      {nInvited > 0 && <span className="text-text-dim">{nInvited} invité{nInvited > 1 ? "s" : ""}</span>}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setConfirmDeleteId(c.id)}
+                      disabled={isPending}
+                      title="Supprimer définitivement"
+                      className="shrink-0 text-text-dim transition-colors hover:text-danger disabled:opacity-50"
+                    >
+                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
+      )}
 
       {actionError && <p className="text-sm text-danger">{actionError}</p>}
 
@@ -621,10 +704,10 @@ export default function ProspectsClient({
         </section>
       )}
 
-      {/* ── Invitations envoyées ───────────────────────────────────────── */}
+      {/* ── Invitations envoyées (30 dernières) ───────────────────────── */}
       {invitedResults.length > 0 && (
         <section>
-          <div className="mb-3 flex items-center gap-3">
+          <div className="mb-3 flex items-center justify-between">
             <button
               type="button"
               onClick={() => setOpenInvited((v) => !v)}
@@ -634,40 +717,55 @@ export default function ProspectsClient({
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
               </svg>
               <h2 className="font-display text-sm font-semibold uppercase tracking-widest text-text-muted group-hover:text-foreground">
-                Invitations envoyées ({visibleInvited.length})
+                Dernières invitations ({invitedResults.length})
               </h2>
             </button>
-            {openInvited && <CampaignFilter campaigns={campaigns} value={filterInvited} onChange={setFilterInvited} />}
+            <a
+              href="/dashboard/prospects/invited"
+              className="rounded-md border border-border px-3 py-1.5 text-xs font-medium text-text-muted transition-colors hover:bg-panel-raised hover:text-foreground"
+            >
+              Voir toutes les invitations →
+            </a>
           </div>
 
-          {openInvited && <div className="overflow-hidden rounded-md border border-border bg-panel">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border bg-panel-raised">
-                  <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wide text-text-dim">Prospect</th>
-                  <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wide text-text-dim">Campagne</th>
-                  <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wide text-text-dim">Invité le</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {visibleInvited.map((r) => {
-                  const campaign = campaignById.get(r.search_id);
-                  return (
-                    <tr key={r.id} className="hover:bg-panel-raised">
-                      <td className="px-4 py-3">
-                        <p className="font-medium text-foreground">{r.full_name ?? "—"}</p>
-                        {r.headline && <p className="max-w-xs truncate text-xs text-text-dim">{r.headline}</p>}
-                      </td>
-                      <td className="px-4 py-3 text-xs text-text-muted">{campaign?.name ?? "—"}</td>
-                      <td className="px-4 py-3 text-xs text-text-dim">
-                        {new Date(r.created_at).toLocaleDateString("fr-FR")}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>}
+          {openInvited && (
+            <div className="overflow-hidden rounded-md border border-border bg-panel">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border bg-panel-raised">
+                    <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wide text-text-dim">Prospect</th>
+                    <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wide text-text-dim">Campagne</th>
+                    <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wide text-text-dim">Invité le</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {invitedResults.map((r) => {
+                    const campaign = campaignById.get(r.search_id);
+                    return (
+                      <tr key={r.id} className="hover:bg-panel-raised">
+                        <td className="px-4 py-3">
+                          <p className="font-medium text-foreground">{r.full_name ?? "—"}</p>
+                          {r.headline && <p className="max-w-xs truncate text-xs text-text-dim">{r.headline}</p>}
+                        </td>
+                        <td className="px-4 py-3 text-xs text-text-muted">{campaign?.name ?? "—"}</td>
+                        <td className="px-4 py-3 text-xs text-text-dim">
+                          {new Date(r.sent_at ?? r.created_at).toLocaleDateString("fr-FR")}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              <div className="border-t border-border px-4 py-2.5 text-center">
+                <a
+                  href="/dashboard/prospects/invited"
+                  className="text-xs text-text-dim transition-colors hover:text-accent"
+                >
+                  Voir toutes les invitations →
+                </a>
+              </div>
+            </div>
+          )}
         </section>
       )}
 
@@ -683,14 +781,35 @@ export default function ProspectsClient({
         const nInvited  = invitedCountByCampaign[c.id]  ?? 0;
         const qp = c.query_params ?? {};
         return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setDetailCampaign(null)}>
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => { setDetailCampaign(null); setEditingName(false); }}>
             <div className="w-full max-w-md rounded-lg border border-border bg-panel p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
               <div className="mb-5 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className={`h-2 w-2 rounded-full ${statusInfo.dot}`} />
-                  <h3 className="font-display text-base font-semibold text-foreground">{c.name ?? "Sans nom"}</h3>
+                <div className="flex min-w-0 flex-1 items-center gap-2">
+                  <span className={`h-2 w-2 shrink-0 rounded-full ${statusInfo.dot}`} />
+                  {editingName ? (
+                    <input
+                      autoFocus
+                      value={nameValue}
+                      onChange={(e) => setNameValue(e.target.value)}
+                      onBlur={() => handleSaveRename(c.id)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") handleSaveRename(c.id);
+                        if (e.key === "Escape") setEditingName(false);
+                      }}
+                      className="min-w-0 flex-1 rounded-md border border-accent/50 bg-panel-raised px-2 py-0.5 font-display text-base font-semibold text-foreground outline-none"
+                    />
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => handleStartRename(c)}
+                      title="Cliquer pour renommer"
+                      className="min-w-0 truncate font-display text-base font-semibold text-foreground hover:text-accent"
+                    >
+                      {campaignNames[c.id] ?? c.name ?? "Sans nom"}
+                    </button>
+                  )}
                 </div>
-                <button type="button" onClick={() => setDetailCampaign(null)} className="text-text-dim hover:text-foreground">
+                <button type="button" onClick={() => { setDetailCampaign(null); setEditingName(false); }} className="ml-2 shrink-0 text-text-dim hover:text-foreground">
                   <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                   </svg>
@@ -700,8 +819,8 @@ export default function ProspectsClient({
               <div className="space-y-4">
                 <div>
                   <div className="mb-1.5 flex justify-between text-xs text-text-muted">
-                    <span>Profils scrapés</span>
-                    <span>{actualScraped} / {c.target_count} ({pct}%)</span>
+                    <span>Profils retenus</span>
+                    <span>{Math.min(actualScraped, c.target_count)} / {c.target_count} ({pct}%)</span>
                   </div>
                   <div className="h-2 rounded-full bg-panel-raised">
                     <div className="h-2 rounded-full bg-accent transition-all" style={{ width: `${pct}%` }} />
@@ -734,13 +853,6 @@ export default function ProspectsClient({
                 </div>
 
                 <div className="grid grid-cols-2 gap-2 pt-1">
-                  <button
-                    type="button"
-                    onClick={() => { setDetailCampaign(null); setFilterPending(c.id); setFilterQueue(c.id); setFilterInvited(c.id); }}
-                    className="col-span-2 rounded-md border border-accent/30 bg-accent/10 px-3 py-2 text-sm font-medium text-accent hover:bg-accent/20"
-                  >
-                    Voir les profils
-                  </button>
                   {statusKey !== "done" && statusKey !== "archived" && (
                     <button
                       type="button"
@@ -814,8 +926,8 @@ export default function ProspectsClient({
 
       {/* ── Modal nouvelle campagne ────────────────────────────────────── */}
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => { setShowModal(false); setFormError(null); setPrefillData(null); }}>
-          <div className="w-full max-w-lg rounded-lg border border-border bg-panel p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-lg rounded-lg border border-border bg-panel p-6 shadow-2xl">
             <h3 className="mb-5 font-display text-base font-semibold text-foreground">
               {prefillData ? `Dupliquer — ${prefillData.name ?? "Campagne"}` : "Nouvelle campagne"}
             </h3>

@@ -23,6 +23,8 @@ Proposer ces skills dans les situations suivantes, sans attendre que ce soit dem
 
 Ce repo est le dashboard client du SaaS LinkedIn Kaizen. Les clients y gèrent leurs agents IA de prospection, voient leurs conversations et configurent leur compte.
 
+**URL prod** : https://saas-kaizen.vercel.app
+
 Documents de pilotage :
 - `ROADMAP.md` : état d'avancement par phases (source de vérité du "où on en est")
 - `LOGBOOK.md` : journal chronologique des sessions
