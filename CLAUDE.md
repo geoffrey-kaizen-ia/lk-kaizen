@@ -41,11 +41,11 @@ Documents de pilotage :
 
 Le repo GitHub est `https://github.com/geoffrey-kaizen-ia/lk-kaizen` (branche `main`).
 
-**Historique important (15/06/2026)** : jusqu'au 15/06, ce dossier local n'avait PAS de dépôt git initialisé (`.git` absent), alors que le projet Vercel `lk-kaizen` (prj_Xf07eLBWFT39ACR95d7VxUhmvu3s, org sorek-inc) était déjà déployé et à jour (lk-kaizen.vercel.app). Cela veut dire que les déploiements précédents ont été faits via la CLI Vercel directement (`vercel --prod`), PAS via push GitHub — le repo GitHub était resté vide depuis sa création.
+**État actuel (vérifié le 26/06/2026)** : le repo GitHub EST connecté au projet Vercel `saas-kaizen` (`prj_t7HIVJBx1jvNVZgruw1Zg7FYtWdc`, équipe KAIZEN IA `team_TT5Fb1yJRioCDsAODEFOOdn1`), branche de prod `main`. URL de prod : `saas-kaizen.vercel.app`. Le dossier local est lié à ce projet via `.vercel/project.json`.
 
-Le 15/06/2026, un `git init` + premier commit + push ont été faits depuis ce dossier vers `main` (49 fichiers, état du code au 15/06 ~17h). À ce stade, le repo GitHub n'est probablement PAS encore connecté au projet Vercel dans les settings (pas de section "Git" visible lors de l'inspection `vercel project inspect`).
+**Conséquence pratique** : un simple `git push origin main` déclenche AUTOMATIQUEMENT un déploiement de prod (confirmé par l'historique : chaque commit poussé a un déploiement `source=git`). Pas besoin de `vercel --prod` après un push. La CLI ne sert plus que pour forcer un redéploiement sans nouveau commit, ou pour un test. Faire un `vercel --prod` après un push ne fait que dupliquer inutilement le déploiement déjà parti du git.
 
-**Conséquence pratique** : tant que le repo GitHub n'est pas connecté au projet Vercel (Settings → Git → Connect Repository), un `git push` ne déclenche AUCUN déploiement automatique. Il faut soit connecter le repo dans Vercel, soit continuer à déployer via `vercel --prod` en CLI. Vérifier l'état de cette connexion avant de supposer qu'un push met à jour le site en prod.
+**Piège historique (résolu)** : il a longtemps existé un AUTRE projet Vercel `lk-kaizen` (`prj_Xf07eLBWFT39ACR95d7VxUhmvu3s`, org sorek-inc, `lk-kaizen.vercel.app`), déployé à l'origine en CLI sur un repo GitHub vide. Avant le 15/06 ce dossier n'avait même pas de `.git`. Le projet de prod actuel est `saas-kaizen` (créé le 22/06 avec le repo connecté), PAS `lk-kaizen`. Si la prod semble ne pas se mettre à jour, vérifier qu'on regarde bien le projet `saas-kaizen` / org KAIZEN IA dans le dashboard Vercel, et pas l'ancien `lk-kaizen` / sorek-inc qui ne bouge plus.
 - n8n (hors repo) : workflows Icebreaker et Conversation qui écrivent dans les tables lk_*
 
 ## Connexion Supabase
