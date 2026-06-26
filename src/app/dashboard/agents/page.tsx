@@ -51,7 +51,7 @@ export default async function AgentsPage({
     // filtre maybeSingle renverrait null et bloquerait l'admin.
     supabase
       .from("lk_clients_config")
-      .select("allowed_roles, can_edit_prompt, icebreaker_mode, icebreaker_template, icebreaker_enabled")
+      .select("allowed_roles, can_edit_prompt, icebreaker_mode, icebreaker_template, icebreaker_enabled, full_name")
       .eq("user_id", user?.id ?? "")
       .maybeSingle(),
     supabase
@@ -87,6 +87,7 @@ export default async function AgentsPage({
           icebreakerTemplate={clientConfig?.icebreaker_template ?? ""}
           icebreakerEnabled={clientConfig?.icebreaker_enabled ?? true}
           relances={(relances ?? []) as Relance[]}
+          accountFullName={(clientConfig?.full_name as string | null) ?? ""}
         />
       )}
     </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   createCampaign,
@@ -13,6 +13,23 @@ import {
   ignoreSelectedIds,
   renameCampaign,
 } from "./actions";
+import IndustryPicker from "./IndustryPicker";
+import TitlePicker from "./TitlePicker";
+
+// Reconstruit la liste des titres à partir des query_params d'une campagne à
+// dupliquer : on lit d'abord keywords_list (nouveau format), sinon on retombe
+// sur l'ancien champ keywords texte libre (séparé par OR ou virgule).
+function titlesFromParams(qp: Record<string, unknown> | null | undefined): string[] {
+  if (!qp) return [];
+  const list = qp.keywords_list;
+  if (Array.isArray(list)) return list.filter((t): t is string => typeof t === "string");
+  const raw = (qp.keywords ?? qp.search_keywords) as string | undefined;
+  if (!raw) return [];
+  return raw
+    .split(/\s+OR\s+|,/i)
+    .map((t) => t.replace(/"/g, "").trim())
+    .filter(Boolean);
+}
 
 type Campaign = {
   id: string;
@@ -100,6 +117,23 @@ export default function ProspectsClient({
   const [prefillData, setPrefillData] = useState<Campaign | null>(null);
   const [detailCampaign, setDetailCampaign] = useState<Campaign | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+  // Verrou du scroll de la page tant qu'une modale est ouverte, sinon le fond
+  // scrolle a la place de la modale et les boutons du bas deviennent inatteignables.
+  const anyModalOpen = showModal || !!detailCampaign || !!confirmDeleteId;
+  useEffect(() => {
+    if (anyModalOpen) {
+      document.documentElement.style.overflow = "hidden";
+      document.body.style.overflow = "hidden";
+    } else {
+      document.documentElement.style.overflow = "";
+      document.body.style.overflow = "";
+    }
+    return () => {
+      document.documentElement.style.overflow = "";
+      document.body.style.overflow = "";
+    };
+  }, [anyModalOpen]);
   const [formError, setFormError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [editingName, setEditingName] = useState(false);
@@ -780,9 +814,25 @@ export default function ProspectsClient({
         const nSelected = selectedCountByCampaign[c.id] ?? 0;
         const nInvited  = invitedCountByCampaign[c.id]  ?? 0;
         const qp = c.query_params ?? {};
+        // Compatibilité ancien format n8n (search_keywords…) vs nouveau format dashboard (keywords…)
+        // Affichage lisible : on préfère la liste de titres (séparés par des
+        // virgules) plutôt que la requête brute "x" OR "y".
+        const titleList = titlesFromParams(qp);
+        const keywords = titleList.length > 0
+          ? titleList.join(", ")
+          : (qp.keywords ?? qp.search_keywords ?? "") as string;
+        const location = (qp.location ?? qp.search_location ?? "") as string;
+        const industry = (qp.industry ?? qp.search_industry ?? "") as string;
+        const rawNetwork = qp.network_distance ?? qp.search_network_distance;
+        const networkLabel = Array.isArray(rawNetwork)
+          ? rawNetwork.join(", ")
+          : rawNetwork === "2,3" ? "2e et 3e degré"
+          : rawNetwork === "2" ? "2e degré"
+          : rawNetwork === "3" ? "3e degré et +"
+          : rawNetwork ? String(rawNetwork) : "";
         return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => { setDetailCampaign(null); setEditingName(false); }}>
-            <div className="w-full max-w-md rounded-lg border border-border bg-panel p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+          <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-4 py-8" onClick={() => { setDetailCampaign(null); setEditingName(false); }}>
+            <div className="w-full max-w-md rounded-lg border border-border bg-panel p-6 shadow-2xl overscroll-contain" onClick={(e) => e.stopPropagation()}>
               <div className="mb-5 flex items-center justify-between">
                 <div className="flex min-w-0 flex-1 items-center gap-2">
                   <span className={`h-2 w-2 shrink-0 rounded-full ${statusInfo.dot}`} />
@@ -843,13 +893,46 @@ export default function ProspectsClient({
                 </div>
 
                 <div className="space-y-1.5 rounded-md border border-border bg-panel-raised px-3 py-2.5 text-xs">
-                  {!!qp.keywords    && <div className="flex justify-between"><span className="text-text-dim">Mots-clés</span><span className="font-medium text-foreground">{String(qp.keywords)}</span></div>}
-                  {!!qp.location    && <div className="flex justify-between"><span className="text-text-dim">Localisation</span><span className="font-medium text-foreground">{String(qp.location)}</span></div>}
-                  {!!qp.network_distance && <div className="flex justify-between"><span className="text-text-dim">Réseau</span><span className="font-medium text-foreground">{String(qp.network_distance) === "2,3" ? "2e et 3e degré" : String(qp.network_distance) === "2" ? "2e degré" : "3e degré et +"}</span></div>}
-                  {!!qp.industry    && <div className="flex justify-between"><span className="text-text-dim">Secteur</span><span className="font-medium text-foreground">{String(qp.industry)}</span></div>}
-                  <div className="flex justify-between"><span className="text-text-dim">Mode</span><span className="font-medium text-foreground">{c.mode === "auto" ? "Invitation auto" : "Validation manuelle"}</span></div>
-                  <div className="flex justify-between"><span className="text-text-dim">Statut</span><span className="font-medium text-foreground">{statusInfo.label}</span></div>
-                  <div className="flex justify-between"><span className="text-text-dim">Créée le</span><span className="font-medium text-foreground">{new Date(c.created_at).toLocaleDateString("fr-FR")}</span></div>
+                  {!!keywords && (
+                    <div className="flex justify-between gap-4">
+                      <span className="shrink-0 text-text-dim">Mots-clés</span>
+                      <span className="text-right font-medium text-foreground">{keywords}</span>
+                    </div>
+                  )}
+                  {!!location && (
+                    <div className="flex justify-between gap-4">
+                      <span className="shrink-0 text-text-dim">Localisation</span>
+                      <span className="text-right font-medium text-foreground">{location}</span>
+                    </div>
+                  )}
+                  {!!networkLabel && (
+                    <div className="flex justify-between gap-4">
+                      <span className="shrink-0 text-text-dim">Réseau</span>
+                      <span className="text-right font-medium text-foreground">{networkLabel}</span>
+                    </div>
+                  )}
+                  {!!industry && (
+                    <div className="flex justify-between gap-4">
+                      <span className="shrink-0 text-text-dim">Secteur</span>
+                      <span className="text-right font-medium text-foreground">{industry}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between gap-4">
+                    <span className="shrink-0 text-text-dim">Objectif</span>
+                    <span className="font-medium text-foreground">{c.target_count} profils</span>
+                  </div>
+                  <div className="flex justify-between gap-4">
+                    <span className="shrink-0 text-text-dim">Mode</span>
+                    <span className="font-medium text-foreground">{c.mode === "auto" ? "Invitation auto" : "Validation manuelle"}</span>
+                  </div>
+                  <div className="flex justify-between gap-4">
+                    <span className="shrink-0 text-text-dim">Statut</span>
+                    <span className="font-medium text-foreground">{statusInfo.label}</span>
+                  </div>
+                  <div className="flex justify-between gap-4">
+                    <span className="shrink-0 text-text-dim">Créée le</span>
+                    <span className="font-medium text-foreground">{new Date(c.created_at).toLocaleDateString("fr-FR")}</span>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-2 pt-1">
@@ -926,8 +1009,8 @@ export default function ProspectsClient({
 
       {/* ── Modal nouvelle campagne ────────────────────────────────────── */}
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-          <div className="w-full max-w-lg rounded-lg border border-border bg-panel p-6 shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-4 py-8">
+          <div className="w-full max-w-lg rounded-lg border border-border bg-panel p-6 shadow-2xl overscroll-contain">
             <h3 className="mb-5 font-display text-base font-semibold text-foreground">
               {prefillData ? `Dupliquer — ${prefillData.name ?? "Campagne"}` : "Nouvelle campagne"}
             </h3>
@@ -939,8 +1022,7 @@ export default function ProspectsClient({
                 </div>
                 <div className="sm:col-span-2">
                   <label className="mb-1.5 block text-xs font-medium text-text-muted">Quel profil cherches-tu ? <span className="text-danger">*</span></label>
-                  <input type="text" name="keywords" required placeholder="Ex : directeur marketing, responsable RH" defaultValue={(prefillData?.query_params?.keywords as string) ?? ""} className="w-full rounded-md border border-border bg-panel-raised px-3 py-2 text-sm text-foreground outline-none focus:border-accent/50" />
-                  <p className="mt-1 text-xs text-text-dim">Titre du poste ou métier ciblé.</p>
+                  <TitlePicker defaultTitles={titlesFromParams(prefillData?.query_params)} />
                 </div>
                 <div>
                   <label className="mb-1.5 block text-xs font-medium text-text-muted">Localisation</label>
@@ -948,8 +1030,10 @@ export default function ProspectsClient({
                 </div>
                 <div>
                   <label className="mb-1.5 block text-xs font-medium text-text-muted">Secteur d&apos;activité</label>
-                  <input type="text" name="industry" placeholder="Ex : Marketing, SaaS B2B, Finance" defaultValue={(prefillData?.query_params?.industry as string) ?? ""} className="w-full rounded-md border border-border bg-panel-raised px-3 py-2 text-sm text-foreground outline-none focus:border-accent/50" />
-                  <p className="mt-1 text-xs text-text-dim">Laisse vide pour ne pas filtrer.</p>
+                  <IndustryPicker
+                    defaultId={(prefillData?.query_params?.industry_id as string) ?? null}
+                    defaultLabel={(prefillData?.query_params?.industry as string) ?? null}
+                  />
                 </div>
                 <div className="sm:col-span-2">
                   <label className="mb-2 block text-xs font-medium text-text-muted">Niveau de relation</label>
@@ -973,11 +1057,6 @@ export default function ProspectsClient({
                 <div>
                   <label className="mb-1.5 block text-xs font-medium text-text-muted">Objectif (profils)</label>
                   <input type="number" name="target_count" min={1} max={5000} defaultValue={prefillData?.target_count ?? 500} className="w-full rounded-md border border-border bg-panel-raised px-3 py-2 text-sm text-foreground outline-none focus:border-accent/50" />
-                </div>
-                <div>
-                  <label className="mb-1.5 block text-xs font-medium text-text-muted">Postes à éviter</label>
-                  <input type="text" name="exclude_titles" placeholder="stagiaire, freelance" className="w-full rounded-md border border-border bg-panel-raised px-3 py-2 text-sm text-foreground outline-none focus:border-accent/50" />
-                  <p className="mt-1 text-xs text-text-dim">Séparés par des virgules.</p>
                 </div>
               </div>
               <div>

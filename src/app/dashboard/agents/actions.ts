@@ -79,6 +79,38 @@ export async function updateAgent(formData: FormData) {
   return { error: null };
 }
 
+export async function duplicateAgent(id: string) {
+  const supabase = await createClient();
+  const accountId = await getAccountId();
+  if (!accountId) return { error: "Compte non configure" };
+
+  // RLS limite la lecture aux agents du compte connecte : pas de risque de
+  // dupliquer l'agent d'un autre client.
+  const { data: source, error: readError } = await supabase
+    .from("lk_agents")
+    .select("name, objectif, prompt_content, knowledge_base")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (readError) return { error: readError.message };
+  if (!source) return { error: "Agent introuvable" };
+
+  // La copie repart active mais non assignee a un role : on ne touche pas
+  // lk_agent_assignments, l'original garde son ou ses roles.
+  const { error } = await supabase.from("lk_agents").insert({
+    account_id: accountId,
+    name: `${source.name ?? "Agent"} (copie)`,
+    objectif: source.objectif,
+    prompt_content: source.prompt_content,
+    knowledge_base: source.knowledge_base,
+    is_active: true,
+  });
+
+  if (error) return { error: error.message };
+  revalidatePath("/dashboard/agents");
+  return { error: null };
+}
+
 export async function archiveAgent(id: string) {
   const supabase = await createClient();
 

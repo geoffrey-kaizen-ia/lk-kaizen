@@ -3,6 +3,134 @@
 Journal chronologique des sessions de travail. Le plus recent en haut.
 Pour la vue d'ensemble par phases, voir [ROADMAP.md](./ROADMAP.md).
 
+## 2026-06-26 — Retour onboarding Karine (Geoffrey) + corrections agents
+
+### Retour reçu (RDV onboarding Karine)
+- Geoffrey a transmis le feedback du 1er RDV onboarding : bugs scraping (secteur ignoré, contacts 1er degré présents), bouton "Modifier" agent inopérant, prompt Kaizen visible, message test pas naturel / trop long / avec tirets, + axes UX wizard (tags, préremplissage, lien objectif conditionnel, longueur d'accroche).
+- Stratégie validée avec Nicolas : traiter d'abord les corrections, puis la refonte UX du wizard en second temps.
+
+### Correction 1 — Modifier un agent rouvre le wizard pré-rempli (point 2 Geoffrey)
+- Le bouton "Modifier" ouvrait une modal basique (nom/objectif/prompt) sans accès aux réponses du formulaire. Désormais il rouvre le wizard complet, pré-rempli depuis `knowledge_base`, pour les agents conversation et prise de contact.
+- Édition de tous les champs → "Enregistrer les modifications" → prompt régénéré automatiquement (`buildPromptContent` / `buildFirstMessagePromptContent`) → `updateAgent`. Navigation adaptée en mode édition (Retour = annuler). Relances et agents legacy : modal simple (fallback). `AgentWizard` reçoit une prop `initialAgent` + `key` pour remount propre.
+
+### Correction 2 — Prompt Kaizen totalement masqué aux non-éditeurs (point 3 Geoffrey)
+- Avant, le prompt restait visible en lecture seule (modal édition + écrans preview du wizard, création comme modification). Pour un client sans `can_edit_prompt`, plus aucun contenu de prompt affiché : encart neutre "moteur technique géré par Kaizen". Bouton "Tester" conservé.
+- Validé : `tsc --noEmit` OK + `npm run build` OK.
+
+### Incident résolu
+- `npm run build` lancé pendant que `next dev` tournait a corrompu `.next` (page blanche localhost, code OK). Réparé : arrêt du dev, `rm -rf .next`, redémarrage propre. Leçon : ne pas builder pendant que le dev tourne, `tsc --noEmit` suffit.
+
+### Points ouverts (prochaines corrections du retour Geoffrey)
+- Point ouvert : scraping secteur non pris en compte (filtre `industry` inefficace côté Unipile classic/people) + contacts 1er degré dans les résultats (durcir `network_distance`).
+- Point ouvert : qualité 1er message (trop long, tirets, pas assez naturel) — renforcer `firstMessageTemplate`, et l'option "exemples de style" ne doit impacter que la forme, pas la longueur.
+- Point ouvert : refonte UX wizard reportée (V1.1) — tags multi-valeurs, préremplissage nom/business depuis le compte, lien objectif conditionnel au mode proposition directe, longueur d'accroche (court/moyen/long), exemples concrets pour "Instructions supplémentaires", clarifier "Terrain d'ouverture".
+
+### Fix scroll modales (campagne + wizard agents)
+- Modale "Nouvelle campagne" (`ProspectsClient.tsx`) : sur petit écran, le formulaire débordait et les boutons "Lancer la campagne" / "Annuler" étaient inatteignables (pas de `max-h` ni `overflow`, `items-center` qui bloque le scroll). Corrigé : overlay scrollable (`items-start` + `overflow-y-auto` + `py-8`), `overscroll-contain` sur la carte, verrou du scroll page (`html` + `body`) via `useEffect` tant qu'une modale est ouverte. Même fix appliqué à la modale détail campagne et au wizard agents (`AgentsClient.tsx`).
+
+### Statut LinkedIn djteks@gmail.com remis à connecté
+- Badge "LinkedIn déconnecté" à tort : en base `is_active = false` alors que côté Unipile le compte (`rsZrC9jYS3am3poE-AZsMg`) est `status OK`. Confirmé l'angle mort connu (`is_active` ≠ vrai statut LinkedIn). Corrigé : `update lk_clients_config set is_active = true`.
+
+### Langue des secteurs d'activité (IndustryPicker)
+- Question Nicolas : sur un projet parallèle les secteurs sortaient en anglais. Confirmé via l'API Unipile : les libellés `/search/parameters?type=INDUSTRY` suivent la langue du compte LinkedIn, et le param `locale` est ignoré (pas forçable). Mais cosmétique seulement : on stocke/filtre sur `industry_id` qui est language-independent (ex marketing = id 1862 FR comme EN). Mémoire projet créée.
+- Point ouvert : mapping FR maison (id → libellé) si l'anglais gêne vraiment des clients un jour — optionnel.
+
+### Refonte wizard agents — axes Geoffrey (faits)
+- Longueur d'accroche : nouveau champ `longueurAccroche` (court/moyen/long, def moyen) dans `firstMessageTemplate`, injecté comme cible en caractères dans le prompt icebreaker (corrige aussi le "message trop long"). Sélecteur 3 boutons dans le wizard.
+- Lien objectif conditionnel : "Lien de ton objectif" n'apparaît plus qu'en mode `proposition_directe`.
+- "Terrain d'ouverture" reformulé en question claire + helper. Helper enrichi avec exemples concrets pour "Instructions supplémentaires".
+- Préremplissage : "Ton nom" depuis `lk_clients_config.full_name` (prop `accountFullName` → `defaults` du wizard), business réutilisé du dernier agent. Mode édition non impacté.
+- Prompt template (3 lignes) : exemples de style = ton/forme jamais longueur ni contenu ; consigne de longueur pilotée. EN ATTENTE validation Geoffrey sur ces formulations.
+
+### Fix scraping secteur — sélecteur de secteur LinkedIn (fait, validé djteks)
+- Diagnostic (tests Unipile read-only) : le texte libre "agroalimentaire" ne matche AUCUN secteur LinkedIn → résolution renvoie null → filtre silencieusement abandonné = cause racine. La taxonomie LinkedIn a ses propres libellés ("Fabrication de produits alimentaires et boissons"...). Format `industry: [id]` confirmé correct (format doc `{include:[id]}` → 400). Le filtre marche dès que l'ID est valide.
+- Solution : champ "Secteur" remplacé par un sélecteur recherche+choix. Server action `searchIndustries(query)` (Unipile `/search/parameters?type=INDUSTRY`), composant `IndustryPicker`, stocke `industry_id` + `industry_label` dans `query_params`, envoie `industry_id` au webhook. `createCampaign` MAJ. tsc OK.
+- Validé : campagne test djteks "directeur" + secteur finance → résultats nettement finance/banque (Crédit Agricole, Messis Finance, Aldebaran Capital...) au lieu de tous secteurs. Bonus : le dashboard envoyant désormais un libellé LinkedIn exact, la résolution n8n existante réussit déjà.
+
+### Filtre 1er degré (n8n, fait)
+- Ligne `if (p.network_distance === 'DISTANCE_1') return false;` ajoutée dans le `.filter()` des 2 nœuds de scraping (`Flatten + metadata1` chemin webhook + `Code - Resolve et Scrape Unipile` chemin cron) → les contacts déjà connectés (1er degré) ne sont plus insérés.
+
+### Langue des secteurs — le boss veut une vraie solution (point ouvert prioritaire)
+- Nouveau constat qui CONTREDIT l'hypothèse "langue = langue du compte" : le compte du boss est en français mais les secteurs sortent en ANGLAIS au scraping. Donc inconsistant et non fiable. Le boss veut que ce soit réglé (risque que d'autres comptes soient en anglais aussi).
+- Confirmé par test : aucun param API (`Accept-Language`, `locale`, `language`, `lang`) ne force la langue.
+- Piste à instruire : embarquer une liste FR maison (id → libellé FR) harvestée une fois depuis Unipile, et faire la recherche/affichage du sélecteur dessus (l'`industry_id` reste language-independent → le filtre marche partout). Stratégie à détailler.
+
+### Champ "titre de poste" à puces dans la création de campagne (fait)
+- Question Nicolas : peut-on cibler plusieurs titres de poste dans une campagne ? Oui, mais LinkedIn ne traite PAS la virgule comme un OU — il faut l'opérateur booléen `OR` (confirmé via `docs/unipile/search.md`). L'ancien champ texte + son aide suggéraient à tort la virgule.
+- Nouveau composant `TitlePicker.tsx` (calqué sur `IndustryPicker`) : saisie à puces, ajout par Entrée/virgule/blur, suppression par ✕ ou Backspace, anti-doublon. Le texte en cours de frappe est inclus même sans Entrée (pas de titre perdu au submit).
+- Assemblage `OR` côté code : les puces deviennent `"titre A" OR "titre B"` (phrases exactes entre guillemets), format envoyé tel quel à n8n/Unipile — pipeline n8n inchangé.
+- `actions.ts` stocke aussi `keywords_list` (JSON) dans `query_params` pour ré-éditer les puces à la duplication ; rétro-compat ascendante (ancien texte libre / format n8n reparsé). Détail campagne affiche les titres lisiblement. `tsc --noEmit` OK.
+- Décision : pas de tags transversaux sur les prospects (la campagne reste l'unité de segmentation) ; les "tags" demandés étaient le champ de saisie à puces, désormais livré.
+
+---
+
+## 2026-06-24 — Audit complet + fixes perf/UX agents et campagnes
+
+### Audit sécurité et qualité
+- Audit complet réalisé : typecheck (0 erreur), hygiène secrets, RLS, advisors Supabase.
+- Confirmé : fonctions admin revérifient `auth.email()` en interne — pas de contournement possible via RPC.
+- 3 avertissements advisors remontés : `search_path` mutable sur 3 fonctions PL/pgSQL (à corriger).
+- Signalé : `lk_prospects` UPDATE policy sur rôle `public` au lieu de `authenticated` (inoffensif mais à corriger).
+
+### Fix performances — page Conversations
+- Vue `lk_last_messages` créée en base : `DISTINCT ON (prospect_id) ORDER BY prospect_id, sent_at DESC`.
+- `conversations/page.tsx` : requête `lk_messages` sans limite remplacée par la vue (1 ligne par prospect). Boucle de déduplication JS supprimée.
+
+### Feature — renommage de campagne
+- Server action `renameCampaign(id, name)` ajoutée (filtre `account_id` pour la sécurité).
+- Modale détail campagne : nom cliquable → input inline, sauvegarde blur/Enter, annulation Échap. Optimistic update dans la liste.
+
+### Fix — détail campagne invisible
+- Bug : `query_params` en deux formats (ancien n8n : `search_keywords`... ; nouveau dashboard : `keywords`...). Code lisait uniquement le nouveau format.
+- Correction : normalisation des deux formats à la lecture, tous les champs affichés (mots-clés, localisation, réseau, secteur, postes exclus, objectif).
+- Bouton "Voir les profils" supprimé de la modale (inutile).
+
+### UX — page Agents
+- Bouton "Nouvel agent" transformé en bloc CTA pleine largeur (bordure pointillée, icône +, description).
+- Cartes agents colorées par type : icebreaker = teinte accent/bleu, conversation = teinte positive/vert.
+- Cartes relances automatiques : teinte ambre (`border-warning/25 bg-warning/[0.04]`).
+
+---
+
+## 2026-06-24 — Stats : redesign KPI en deux groupes
+
+- Page `/dashboard/stats` : KPI réorganisés en deux sections distinctes.
+- Groupe "Résultats" (4 cartes mises en avant) : invitations acceptées, taux d'acceptation, messages répondus, taux de réponse.
+- Groupe "Actions envoyées" (2 cartes secondaires) : invitations envoyées, messages envoyés.
+- Taux d'acceptation = acceptées / envoyées ; taux de réponse = répondus / acceptées (base pertinente).
+- `StatCard` enrichi d'une prop `small` pour hiérarchie visuelle entre les deux groupes.
+- Déployé en prod (`saas-kaizen.vercel.app`) via `npx vercel --prod` + push GitHub configuré avec token PAT Geoffrey.
+
+---
+
+## 2026-06-24 — Prospection : fix scraping + UI campagnes + pagination invitations
+
+### Fix max_results hardcodé à 50
+
+- Bug identifié dans `actions.ts` : `max_results: 50` envoyé au webhook n8n quelle que soit la saisie client. Corrigé en remplaçant par `targetCount` (variable déjà calculée depuis le champ `target_count` du formulaire).
+
+### Option A : arrêt scraping au plafond (comptage réel en base)
+
+- Refonte des 3 noeuds Code du cron scraping (`u9NRd0JkerDhuipM` branche 8h30) — guidage pas à pas dans n8n (jamais update_workflow SDK).
+- "Code - Init scraping par campagne" : requête PostgREST avec `Prefer: count=exact, Range: 0-0` pour lire le vrai nombre de lignes via `content-range` ; si `already >= target` → PATCH status=done et skip.
+- "Code - Resolve et Scrape Unipile" : `pageLimit = Math.min(50, remaining)` (plus de 50 hardcodé) ; guard `profiles.slice(0, remaining)` si dépassement.
+- "Code - MAJ campagne et Inserer resultats" : insert avec `on_conflict=account_id,provider_id` + `resolution=ignore-duplicates` ; recompte les lignes réelles après insert pour écrire `total_scraped` juste.
+- Bug collatéral résolu : contrainte UNIQUE rejetait le batch complet en cas de doublon — corrigé avec ignore-duplicates.
+
+### Contrainte archive + UI campagnes
+
+- Erreur `violates check constraint "lk_searches_status_check"` : la valeur `'archived'` manquait dans le CHECK. Contrainte droppée et recrée avec `ARRAY['active','paused','done','archived']` (migration directe Supabase).
+- Section "Archives" ajoutée dans `ProspectsClient.tsx` : accordéon replié par défaut, campagnes archivées en grisé avec stats (scrapés / invités) + bouton supprimer.
+- Affichage "Invité le" corrigé : utilise `sent_at ?? created_at` (avant : toujours `created_at`).
+- Compteur campagne clampé : `Math.min(actualScraped, target_count)` pour éviter "68/30" sur vieilles campagnes.
+
+### Pagination invitations
+
+- Section "Invitations envoyées" remplacée par "Dernières invitations" (30 lignes, sans filtre inutile côté serveur).
+- Nouvelle page `/dashboard/prospects/invited` : pagination serveur 50/page via `.range()`, 4 filtres cumulables (campagne, recherche nom, date de/à), URL-based (shareable). Composant `InvitedFilters.tsx` côté client.
+
+---
+
 ## 2026-06-24 — Fix noeud Code workflow Icebreaker (n8n)
 
 - Crash diagnostiqué : `SyntaxError: Unexpected token 'e', "event=new_"... is not valid JSON` dans le noeud Code du workflow Icebreaker (`0yQOYs1Ffiqtj4IX`).

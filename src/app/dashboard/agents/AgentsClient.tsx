@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useTransition, useRef } from "react";
+import { useState, useTransition, useRef, useEffect } from "react";
 import {
   createAgent,
   updateAgent,
+  duplicateAgent,
   archiveAgent,
   deleteAgent,
   upsertAssignment,
@@ -195,6 +196,7 @@ export default function AgentsClient({
   icebreakerTemplate,
   icebreakerEnabled,
   relances,
+  accountFullName,
 }: {
   agents: Agent[];
   assignments: Assignment[];
@@ -204,10 +206,26 @@ export default function AgentsClient({
   icebreakerTemplate: string;
   icebreakerEnabled: boolean;
   relances: Relance[];
+  accountFullName: string;
 }) {
   const [modalOpen, setModalOpen] = useState(false);
   const [wizardOpen, setWizardOpen] = useState(false);
   const [editingAgent, setEditingAgent] = useState<Agent | null>(null);
+
+  useEffect(() => {
+    if (wizardOpen || modalOpen) {
+      document.documentElement.style.overflow = "hidden";
+      document.body.style.overflow = "hidden";
+    } else {
+      document.documentElement.style.overflow = "";
+      document.body.style.overflow = "";
+    }
+    return () => {
+      document.documentElement.style.overflow = "";
+      document.body.style.overflow = "";
+    };
+  }, [wizardOpen, modalOpen]);
+  const [editingWizardAgent, setEditingWizardAgent] = useState<Agent | null>(null);
   const [testingAgent, setTestingAgent] = useState<Agent | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [pendingAgentType, setPendingAgentType] = useState<string | null>(null);
@@ -295,6 +313,25 @@ export default function AgentsClient({
   const activeAgents = agents.filter((a) => a.is_active !== false);
   const archivedAgents = agents.filter((a) => a.is_active === false);
 
+  // Prefill du wizard a la creation : on reutilise le nom et le business deja
+  // saisis dans un agent precedent. La fiche client (full_name) est souvent
+  // vide, on ne s'appuie donc pas dessus en priorite pour le nom. Tout reste
+  // vide au tout premier agent, c'est attendu.
+  const firstAgentValue = (
+    key: "userName" | "businessName" | "businessDescription"
+  ): string => {
+    for (const a of agents) {
+      const v = a.knowledge_base?.[key];
+      if (typeof v === "string" && v.trim() !== "") return v.trim();
+    }
+    return "";
+  };
+  const wizardDefaults = {
+    userName: firstAgentValue("userName") || accountFullName,
+    businessName: firstAgentValue("businessName"),
+    businessDescription: firstAgentValue("businessDescription"),
+  };
+
   const assignmentMap: Record<string, string> = Object.fromEntries(
     assignments.map((a) => [a.role, a.agent_id])
   );
@@ -304,6 +341,7 @@ export default function AgentsClient({
 
   function openCreate() {
     setEditingAgent(null);
+    setEditingWizardAgent(null);
     setFormError(null);
     setPendingAgentType(null);
     setWizardOpen(true);
@@ -319,12 +357,13 @@ export default function AgentsClient({
   }
 
   function handleWizardCreate(data: {
+    id?: string;
     name: string;
     objectif: string;
     prompt_content: string;
     knowledge_base?: unknown;
   }) {
-    if (data.name === "" && data.objectif === "" && data.prompt_content === "") {
+    if (!data.id && data.name === "" && data.objectif === "" && data.prompt_content === "") {
       // Agent vierge : ouvrir le formulaire libre habituel, en conservant le type choisi
       const kb = data.knowledge_base as { agentType?: unknown } | undefined;
       const agentType = typeof kb?.agentType === "string" ? kb.agentType : null;
@@ -338,6 +377,7 @@ export default function AgentsClient({
     }
 
     const formData = new FormData();
+    if (data.id) formData.set("id", data.id);
     formData.set("name", data.name);
     formData.set("objectif", data.objectif);
     formData.set("prompt_content", data.prompt_content);
@@ -346,18 +386,32 @@ export default function AgentsClient({
     }
 
     startTransition(async () => {
-      const result = await createAgent(formData);
+      const result = data.id ? await updateAgent(formData) : await createAgent(formData);
       if (result.error) {
         setFormError(result.error);
       } else {
         setWizardOpen(false);
+        setEditingWizardAgent(null);
       }
     });
   }
 
   function openEdit(agent: Agent) {
-    setEditingAgent(agent);
     setFormError(null);
+    const type = getAgentType(agent);
+    // Agents crees via le wizard (conversation / prise de contact) : on rouvre
+    // le wizard pre-rempli pour modifier les reponses et regenerer le prompt.
+    const hasWizardData =
+      !!agent.knowledge_base &&
+      (type === "conversation" || type === "icebreaker" || type === "invitation_recue");
+    if (hasWizardData) {
+      setEditingWizardAgent(agent);
+      setPendingAgentType(null);
+      setWizardOpen(true);
+      return;
+    }
+    // Relances + agents legacy sans donnees structurees : modal simple.
+    setEditingAgent(agent);
     setPendingAgentType(null);
     setRelanceContent(agent.prompt_content ?? "");
     setPromptContent(agent.prompt_content ?? "");
@@ -388,6 +442,14 @@ export default function AgentsClient({
         setModalOpen(false);
         setPendingAgentType(null);
       }
+    });
+  }
+
+  function handleDuplicate(id: string) {
+    setFormError(null);
+    startTransition(async () => {
+      const result = await duplicateAgent(id);
+      if (result.error) setFormError(result.error);
     });
   }
 
@@ -450,10 +512,26 @@ export default function AgentsClient({
         </div>
       </section>
 
+      {/* CTA Nouvel agent */}
+      <button
+        onClick={openCreate}
+        className="mb-8 flex w-full items-center gap-4 rounded-lg border-2 border-dashed border-accent/30 bg-accent/5 px-5 py-4 text-left transition-colors hover:border-accent/50 hover:bg-accent/10"
+      >
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-accent/30 bg-accent/10 text-accent">
+          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+          </svg>
+        </span>
+        <div>
+          <p className="text-sm font-semibold text-accent">Créer un nouvel agent</p>
+          <p className="text-xs text-text-muted">Icebreaker, conversation — guide ton prospect vers ton objectif.</p>
+        </div>
+      </button>
+
       {/* Roles */}
       <section className="mb-8">
-        <h2 className="mb-1 font-display text-xs font-semibold uppercase tracking-[0.2em] text-text-muted">
-          Roles actifs
+        <h2 className="mb-1 font-display text-base font-semibold tracking-tight text-foreground">
+          Rôles actifs
         </h2>
         <p className="mb-4 text-sm text-text-muted">
           Choisis quel agent joue chaque rôle dans ta séquence de prospection.
@@ -686,7 +764,7 @@ export default function AgentsClient({
       {/* Relances automatiques */}
       <section className="mb-8">
         <div className="mb-1 flex items-center justify-between">
-          <h2 className="font-display text-xs font-semibold uppercase tracking-[0.2em] text-text-muted">
+          <h2 className="font-display text-base font-semibold tracking-tight text-foreground">
             Relances automatiques
           </h2>
           {!allowedRoles.includes("relance") && (
@@ -717,18 +795,12 @@ export default function AgentsClient({
         <h1 className="font-display text-xl font-semibold tracking-tight text-foreground">
           Mes agents
         </h1>
-        <button
-          onClick={openCreate}
-          className="rounded-md border border-accent/30 bg-accent/10 px-4 py-2 text-sm font-medium text-accent transition-colors hover:bg-accent/20"
-        >
-          Nouvel agent
-        </button>
       </div>
 
       {/* Active agents */}
       {activeAgents.length === 0 && (
         <p className="text-sm text-text-muted">
-          Aucun agent actif. Cree ton premier agent.
+          Aucun agent actif. Crée ton premier agent.
         </p>
       )}
       <ul className="space-y-4">
@@ -742,6 +814,7 @@ export default function AgentsClient({
               agent={agent}
               assignedRoles={assignedRoles}
               onEdit={openEdit}
+              onDuplicate={handleDuplicate}
               onArchive={handleArchive}
               onDelete={handleDelete}
               onTest={setTestingAgent}
@@ -815,15 +888,15 @@ export default function AgentsClient({
       {/* Wizard de creation */}
       {wizardOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-4 py-8"
         >
-          <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-lg border border-border bg-panel p-6 shadow-xl">
+          <div className="w-full max-w-2xl rounded-lg border border-border bg-panel p-6 shadow-xl overscroll-contain">
             <div className="mb-5 flex items-center justify-between">
               <h2 className="font-display text-base font-semibold uppercase tracking-widest text-foreground">
-                Nouvel agent
+                {editingWizardAgent ? "Modifier l'agent" : "Nouvel agent"}
               </h2>
               <button
-                onClick={() => setWizardOpen(false)}
+                onClick={() => { setWizardOpen(false); setEditingWizardAgent(null); }}
                 className="text-text-muted hover:text-foreground"
                 aria-label="Fermer"
               >
@@ -836,11 +909,14 @@ export default function AgentsClient({
               </p>
             )}
             <AgentWizard
-              onCancel={() => setWizardOpen(false)}
+              key={editingWizardAgent?.id ?? "new"}
+              onCancel={() => { setWizardOpen(false); setEditingWizardAgent(null); }}
               onCreate={handleWizardCreate}
               isPending={isPending}
               canEditPrompt={canEditPrompt}
               allowedRoles={allowedRoles}
+              initialAgent={editingWizardAgent}
+              defaults={wizardDefaults}
             />
           </div>
         </div>
@@ -989,17 +1065,9 @@ export default function AgentsClient({
                       />
                     </div>
                   ) : (
-                    <div>
-                      <label className="mb-1 block text-sm font-medium text-text-muted">
-                        Prompt
-                      </label>
-                      <div className="max-h-64 overflow-y-auto rounded-md border border-border bg-panel-raised px-3 py-2.5">
-                        <p className="whitespace-pre-wrap font-mono text-xs text-text-dim">
-                          {editingAgent?.prompt_content ?? "Aucun prompt genere."}
-                        </p>
-                      </div>
-                      <p className="mt-1 text-xs text-text-dim">
-                        Lecture seule — modifiable uniquement par l&apos;equipe Kaizen.
+                    <div className="rounded-md border border-border bg-panel-raised px-3 py-2.5">
+                      <p className="text-xs text-text-muted">
+                        Le moteur technique de cet agent est gere par l&apos;equipe Kaizen.
                       </p>
                     </div>
                   )}
@@ -1127,7 +1195,7 @@ function RelanceCard({
   }
 
   return (
-    <div className="rounded-lg border border-border bg-panel p-4">
+    <div className="rounded-lg border border-warning/25 bg-warning/[0.04] p-4">
       <div className="mb-3 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <svg className="h-5 w-5 text-warning" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
@@ -1281,6 +1349,7 @@ function AgentCard({
   agent,
   assignedRoles,
   onEdit,
+  onDuplicate,
   onArchive,
   onDelete,
   onTest,
@@ -1290,6 +1359,7 @@ function AgentCard({
   agent: Agent;
   assignedRoles: string[];
   onEdit: (a: Agent) => void;
+  onDuplicate: (id: string) => void;
   onArchive: (id: string) => void;
   onDelete: (id: string, name: string | null) => void;
   onTest: (a: Agent) => void;
@@ -1298,9 +1368,14 @@ function AgentCard({
 }) {
   const typeIcon = AGENT_TYPE_ICON[getAgentType(agent) ?? ""] ?? null;
   const summary = buildAgentSummary(agent);
+  const agentType = getAgentType(agent);
+  const cardAccent =
+    agentType === "icebreaker" ? "border-accent/25 bg-accent/[0.03]"
+    : agentType === "conversation" ? "border-positive/25 bg-positive/[0.03]"
+    : "border-border bg-panel";
 
   return (
-    <li className="rounded-lg border border-border bg-panel p-5">
+    <li className={`rounded-lg border p-5 ${cardAccent}`}>
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
@@ -1325,7 +1400,7 @@ function AgentCard({
             <p className="mt-0.5 text-sm text-text-muted">{agent.objectif}</p>
           )}
         </div>
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex shrink-0 items-center gap-1.5">
           {getAgentType(agent) !== "relance" && (
             <button
               onClick={() => onTest(agent)}
@@ -1338,23 +1413,46 @@ function AgentCard({
           <button
             onClick={() => onEdit(agent)}
             disabled={isPending}
-            className="rounded-md border border-border-strong px-3 py-1.5 text-xs text-text-muted hover:bg-panel-raised hover:text-foreground disabled:opacity-50"
+            title="Modifier"
+            aria-label="Modifier"
+            className="rounded-md border border-border-strong p-1.5 text-text-muted transition-colors hover:bg-panel-raised hover:text-foreground disabled:opacity-50"
           >
-            Modifier
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+            </svg>
+          </button>
+          <button
+            onClick={() => onDuplicate(agent.id)}
+            disabled={isPending}
+            title="Dupliquer"
+            aria-label="Dupliquer"
+            className="rounded-md border border-border-strong p-1.5 text-text-muted transition-colors hover:bg-panel-raised hover:text-foreground disabled:opacity-50"
+          >
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2" />
+            </svg>
           </button>
           <button
             onClick={() => onArchive(agent.id)}
             disabled={isPending}
-            className="rounded-md border border-border px-3 py-1.5 text-xs text-text-dim hover:bg-panel-raised hover:text-text-muted disabled:opacity-50"
+            title="Archiver"
+            aria-label="Archiver"
+            className="rounded-md border border-border p-1.5 text-text-dim transition-colors hover:bg-panel-raised hover:text-text-muted disabled:opacity-50"
           >
-            Archiver
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+            </svg>
           </button>
           <button
             onClick={() => onDelete(agent.id, agent.name)}
             disabled={isPending}
-            className="rounded-md border border-danger/30 px-3 py-1.5 text-xs text-danger hover:bg-danger/10 disabled:opacity-50"
+            title="Supprimer"
+            aria-label="Supprimer"
+            className="rounded-md border border-danger/30 p-1.5 text-danger transition-colors hover:bg-danger/10 disabled:opacity-50"
           >
-            Supprimer
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
           </button>
         </div>
       </div>

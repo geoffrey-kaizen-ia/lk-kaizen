@@ -22,14 +22,22 @@ export async function createCampaign(formData: FormData) {
   if (!accountId) return { error: "Compte non configure" };
 
   const name = (formData.get("name") as string)?.trim();
+  // keywords = requête LinkedIn finale ("x" OR "y") assemblée par TitlePicker.
+  // keywords_list = liste brute des titres (JSON), conservée pour ré-édition.
   const keywords = (formData.get("keywords") as string)?.trim();
+  let keywordsList: string[] = [];
+  try {
+    const parsed = JSON.parse((formData.get("keywords_list") as string) || "[]");
+    if (Array.isArray(parsed)) keywordsList = parsed.filter((t) => typeof t === "string");
+  } catch {
+    keywordsList = [];
+  }
   const location = (formData.get("location") as string)?.trim() || null;
   const networkDistance = (formData.get("network_distance") as string) || null;
-  const industry = (formData.get("industry") as string)?.trim() || null;
-  const excludeTitles = ((formData.get("exclude_titles") as string) || "")
-    .split(",")
-    .map((t) => t.trim())
-    .filter((t) => t.length > 0);
+  // Secteur : on stocke le libellé LinkedIn (pour l'affichage) ET son ID résolu
+  // (pour n8n, qui filtre directement dessus sans avoir à le re-résoudre).
+  const industry = (formData.get("industry_label") as string)?.trim() || null;
+  const industryId = (formData.get("industry_id") as string)?.trim() || null;
   const targetCountRaw = (formData.get("target_count") as string)?.trim();
   const targetCount = targetCountRaw ? Number(targetCountRaw) : 500;
   const mode = (formData.get("mode") as string) === "auto" ? "auto" : "validation";
@@ -52,7 +60,7 @@ export async function createCampaign(formData: FormData) {
       account_id: accountId,
       name,
       query_hash: queryHash,
-      query_params: { keywords, location, network_distance: networkDistance, industry, exclude_titles: excludeTitles },
+      query_params: { keywords, keywords_list: keywordsList, location, network_distance: networkDistance, industry, industry_id: industryId },
       target_count: targetCount,
       mode,
       status: "active",
@@ -77,7 +85,7 @@ export async function createCampaign(formData: FormData) {
       max_results: targetCount,
       auto_invite: mode === "auto",
       industry: industry || "",
-      exclude_titles: excludeTitles,
+      industry_id: industryId || "",
     }),
   }).catch(() => {});
 

@@ -13,9 +13,11 @@ import {
   EMPTY_FIRST_MESSAGE_FORM,
   FIRST_MESSAGE_OBJECTIF,
   STRUCTURE_MESSAGE_LABELS,
+  LONGUEUR_ACCROCHE_LABELS,
   type FirstMessageAgentType,
   type FirstMessageFormData,
   type StructureMessage,
+  type LongueurAccroche,
 } from "./firstMessageTemplate";
 import TestAgentModal from "./TestAgentModal";
 import TestFirstMessageModal from "./TestFirstMessageModal";
@@ -44,9 +46,12 @@ export default function AgentWizard({
   isPending,
   canEditPrompt = false,
   allowedRoles = ["icebreaker", "conversation"],
+  initialAgent = null,
+  defaults = {},
 }: {
   onCancel: () => void;
   onCreate: (data: {
+    id?: string;
     name: string;
     objectif: string;
     prompt_content: string;
@@ -55,18 +60,62 @@ export default function AgentWizard({
   isPending: boolean;
   canEditPrompt?: boolean;
   allowedRoles?: string[];
+  initialAgent?: {
+    id: string;
+    name: string | null;
+    objectif: string | null;
+    knowledge_base: Record<string, unknown> | null;
+  } | null;
+  defaults?: { userName?: string; businessName?: string; businessDescription?: string };
 }) {
-  const [step, setStep] = useState<Step>("type");
-  const [agentType, setAgentType] = useState<"conversation" | FirstMessageAgentType | null>(null);
+  // Mode edition : on pre-remplit le wizard depuis knowledge_base et on saute
+  // les ecrans de selection pour atterrir directement sur le formulaire.
+  const editing = initialAgent;
+  const editKb = (editing?.knowledge_base ?? null) as Record<string, unknown> | null;
+  const editType =
+    typeof editKb?.agentType === "string" ? (editKb.agentType as string) : null;
+  const isEdit = !!editing;
+  const isEditConversation = isEdit && editType === "conversation";
+  const isEditFirstMessage =
+    isEdit && (editType === "icebreaker" || editType === "invitation_recue");
+
+  const [step, setStep] = useState<Step>(
+    isEditConversation ? "form" : isEditFirstMessage ? "fm_form" : "type"
+  );
+  const [agentType, setAgentType] = useState<"conversation" | FirstMessageAgentType | null>(
+    isEdit ? (editType as "conversation" | FirstMessageAgentType | null) : null
+  );
   const [formStep, setFormStep] = useState(1);
-  const [form, setForm] = useState<AgentFormData>(EMPTY_FORM);
-  const [agentName, setAgentName] = useState("");
+  const [form, setForm] = useState<AgentFormData>(
+    isEditConversation
+      ? { ...EMPTY_FORM, ...(editKb as unknown as Partial<AgentFormData>) }
+      : {
+          ...EMPTY_FORM,
+          userName: defaults.userName ?? "",
+          businessName: defaults.businessName ?? "",
+          businessDescription: defaults.businessDescription ?? "",
+        }
+  );
+  const [agentName, setAgentName] = useState(
+    isEditConversation ? editing?.name ?? "" : ""
+  );
   const [generatedPrompt, setGeneratedPrompt] = useState("");
   const [generatingStepIndex, setGeneratingStepIndex] = useState(0);
 
   // Formulaire court "premier message" (icebreaker / invitation recue)
-  const [fmForm, setFmForm] = useState<FirstMessageFormData>(EMPTY_FIRST_MESSAGE_FORM);
-  const [fmAgentName, setFmAgentName] = useState("");
+  const [fmForm, setFmForm] = useState<FirstMessageFormData>(
+    isEditFirstMessage
+      ? { ...EMPTY_FIRST_MESSAGE_FORM, ...(editKb as unknown as Partial<FirstMessageFormData>) }
+      : {
+          ...EMPTY_FIRST_MESSAGE_FORM,
+          userName: defaults.userName ?? "",
+          businessName: defaults.businessName ?? "",
+          businessDescription: defaults.businessDescription ?? "",
+        }
+  );
+  const [fmAgentName, setFmAgentName] = useState(
+    isEditFirstMessage ? editing?.name ?? "" : ""
+  );
   const [fmGeneratedPrompt, setFmGeneratedPrompt] = useState("");
   const [fmGeneratingStepIndex, setFmGeneratingStepIndex] = useState(0);
 
@@ -249,7 +298,15 @@ export default function AgentWizard({
             disabled={!canIcebreaker}
             onClick={() => {
               setAgentType("icebreaker");
-              setFmForm(EMPTY_FIRST_MESSAGE_FORM);
+              // On repart d'un formulaire vierge mais on conserve le
+              // preremplissage (nom / business / description) repris des agents
+              // existants, sinon le reset l'ecraserait.
+              setFmForm({
+                ...EMPTY_FIRST_MESSAGE_FORM,
+                userName: defaults.userName ?? "",
+                businessName: defaults.businessName ?? "",
+                businessDescription: defaults.businessDescription ?? "",
+              });
               setFmAgentName("");
               setStep("fm_mode");
             }}
@@ -384,7 +441,7 @@ export default function AgentWizard({
         <div className="mt-5 flex justify-between">
           <button
             type="button"
-            onClick={() => setStep("type")}
+            onClick={() => setStep(isEdit ? "fm_form" : "type")}
             className="rounded-md border border-border-strong px-4 py-2 text-sm text-text-muted hover:bg-panel-raised hover:text-foreground"
           >
             Retour
@@ -439,11 +496,12 @@ export default function AgentWizard({
         </div>
         {agentType === "icebreaker" && (
           <TextAreaField
-            label="Terrain d'ouverture"
+            label="Sur quel sujet veux-tu engager la conversation ?"
             required
+            helper="Le thème, lié à ton expertise, qui sert de point de départ au message. L'agent ouvre dessus sans rien vendre. Décris-le en une phrase, du point de vue du prospect."
             value={fmForm.sujetLegitimite}
             onChange={(v) => updateFmField("sujetLegitimite", v)}
-            placeholder="Le sujet sur lequel tu es legitime pour amorcer la conversation. Ex : la prospection commerciale que les independants repoussent faute de temps"
+            placeholder="Ex : la prospection commerciale que les indépendants repoussent faute de temps"
             rows={2}
           />
         )}
@@ -478,7 +536,7 @@ export default function AgentWizard({
             rows={2}
           />
         )}
-        {agentType === "icebreaker" && (
+        {agentType === "icebreaker" && fmForm.structureMessage === "proposition_directe" && (
           <Field
             label="Lien de ton objectif (optionnel)"
             value={fmForm.ctaUrl}
@@ -510,9 +568,43 @@ export default function AgentWizard({
             </select>
           </div>
         </div>
+        {agentType === "icebreaker" && (
+          <div>
+            <label className="mb-1 block text-sm font-medium text-text-muted">
+              Longueur du message
+            </label>
+            <p className="mb-2 text-xs text-text-dim">
+              Pilote la taille du message généré. À garder court pour rester naturel sur LinkedIn.
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              {(Object.keys(LONGUEUR_ACCROCHE_LABELS) as LongueurAccroche[]).map((key) => {
+                const active = fmForm.longueurAccroche === key;
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => updateFmField("longueurAccroche", key)}
+                    className={`rounded-md border px-3 py-2 text-left transition-colors ${
+                      active
+                        ? "border-accent/50 bg-accent/10"
+                        : "border-border-strong bg-panel-raised hover:border-accent/30"
+                    }`}
+                  >
+                    <span className={`block text-sm font-medium ${active ? "text-accent" : "text-foreground"}`}>
+                      {LONGUEUR_ACCROCHE_LABELS[key].title}
+                    </span>
+                    <span className="mt-0.5 block text-[11px] leading-tight text-text-dim">
+                      {LONGUEUR_ACCROCHE_LABELS[key].hint}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
         <ListField
           label="Exemples de ta facon de t'exprimer (optionnel)"
-          helper="Quelques phrases types pour que l'IA reprenne ton style."
+          helper="Quelques phrases types pour que l'IA reprenne ton style d'écriture. Elles influencent le ton et la forme, jamais la longueur du message."
           items={fmForm.styleExamples}
           onAdd={addFmStyleExample}
           onChange={updateFmStyleExample}
@@ -521,16 +613,17 @@ export default function AgentWizard({
         />
         <TextAreaField
           label="Instructions supplementaires (optionnel)"
+          helper="Des règles précises que l'agent doit toujours respecter sur ce premier message. Ex : ne jamais mentionner les tarifs, toujours citer notre certification, éviter le mot 'partenariat', ne pas parler de notre concurrent X, écrire en anglais si le profil est anglophone."
           value={fmForm.additionalInstructions}
           onChange={(v) => updateFmField("additionalInstructions", v)}
-          placeholder="Regles ou contexte que l'IA doit absolument connaitre pour ce premier message."
+          placeholder="Ex : ne jamais promettre de résultat chiffré, rester sur le tutoiement même si le prospect vouvoie."
           rows={3}
         />
 
         <div className="flex items-center justify-between gap-3 border-t border-border pt-4">
           <button
             type="button"
-            onClick={() => setStep(agentType === "icebreaker" ? "fm_mode" : "type")}
+            onClick={() => (isEdit ? onCancel() : setStep(agentType === "icebreaker" ? "fm_mode" : "type"))}
             className="rounded-md border border-border-strong px-4 py-2 text-sm text-text-muted hover:bg-panel-raised hover:text-foreground"
           >
             Retour
@@ -575,8 +668,8 @@ export default function AgentWizard({
       <div>
         <p className="mb-3 text-sm text-text-muted">
           {canEditPrompt
-            ? "Voici le prompt genere a partir de tes reponses. Relis-le et ajuste-le si besoin avant de creer l'agent."
-            : "Voici le prompt genere a partir de tes reponses. Tu peux le relire avant de creer l'agent."}
+            ? "Voici le prompt genere a partir de tes reponses. Relis-le et ajuste-le si besoin."
+            : "Ton agent est pret. Donne-lui un nom, teste-le sur un profil, puis enregistre-le."}
         </p>
         <div className="mb-4">
           <label className="mb-1 block text-sm font-medium text-text-muted">
@@ -590,28 +683,23 @@ export default function AgentWizard({
             placeholder={agentType === "icebreaker" ? "Ex: Prise de contact 1" : "Ex: Remerciement invitation reçue"}
           />
         </div>
-        <div className="mb-4">
-          <label className="mb-1 block text-sm font-medium text-text-muted">Prompt genere</label>
-          {canEditPrompt ? (
+        {canEditPrompt ? (
+          <div className="mb-4">
+            <label className="mb-1 block text-sm font-medium text-text-muted">Prompt genere</label>
             <textarea
               value={fmGeneratedPrompt}
               onChange={(e) => setFmGeneratedPrompt(e.target.value)}
               rows={16}
               className="w-full rounded-md border border-border-strong bg-panel-raised px-3 py-2 font-display text-xs text-foreground focus:border-accent focus:outline-none"
             />
-          ) : (
-            <div>
-              <div className="max-h-96 overflow-y-auto rounded-md border border-border bg-panel-raised px-3 py-2.5">
-                <p className="whitespace-pre-wrap font-mono text-xs text-text-dim">
-                  {fmGeneratedPrompt}
-                </p>
-              </div>
-              <p className="mt-1 text-xs text-text-dim">
-                Lecture seule — modifiable uniquement par l&apos;equipe Kaizen.
-              </p>
-            </div>
-          )}
-        </div>
+          </div>
+        ) : (
+          <div className="mb-4 rounded-md border border-border bg-panel-raised px-3 py-2.5">
+            <p className="text-xs text-text-muted">
+              Le moteur technique de ton agent est gere par l&apos;equipe Kaizen. Tu peux le tester avant de l&apos;enregistrer.
+            </p>
+          </div>
+        )}
         <div className="flex justify-between gap-3">
           <button
             type="button"
@@ -648,6 +736,7 @@ export default function AgentWizard({
               disabled={isPending || !fmAgentName.trim()}
               onClick={() =>
                 onCreate({
+                  id: editing?.id,
                   name: fmAgentName.trim(),
                   objectif: FIRST_MESSAGE_OBJECTIF[agentType],
                   prompt_content: fmGeneratedPrompt,
@@ -656,7 +745,13 @@ export default function AgentWizard({
               }
               className="rounded-md border border-accent/30 bg-accent/10 px-4 py-2 text-sm font-medium text-accent transition-colors hover:bg-accent/20 disabled:opacity-50"
             >
-              {isPending ? "Creation..." : "Creer l'agent"}
+              {isPending
+                ? isEdit
+                  ? "Enregistrement..."
+                  : "Creation..."
+                : isEdit
+                  ? "Enregistrer les modifications"
+                  : "Creer l'agent"}
             </button>
           </div>
         </div>
@@ -670,8 +765,8 @@ export default function AgentWizard({
       <div>
         <p className="mb-3 text-sm text-text-muted">
           {canEditPrompt
-            ? "Voici le prompt genere a partir de tes reponses. Relis-le et ajuste-le si besoin avant de creer l'agent."
-            : "Voici le prompt genere a partir de tes reponses. Tu peux le relire avant de creer l'agent."}
+            ? "Voici le prompt genere a partir de tes reponses. Relis-le et ajuste-le si besoin."
+            : "Ton agent est pret. Donne-lui un nom, teste-le, puis enregistre-le."}
         </p>
         <div className="mb-4">
           <label className="mb-1 block text-sm font-medium text-text-muted">
@@ -685,28 +780,23 @@ export default function AgentWizard({
             placeholder="Ex: Prospection dirigeants TPE"
           />
         </div>
-        <div className="mb-4">
-          <label className="mb-1 block text-sm font-medium text-text-muted">Prompt genere</label>
-          {canEditPrompt ? (
+        {canEditPrompt ? (
+          <div className="mb-4">
+            <label className="mb-1 block text-sm font-medium text-text-muted">Prompt genere</label>
             <textarea
               value={generatedPrompt}
               onChange={(e) => setGeneratedPrompt(e.target.value)}
               rows={16}
               className="w-full rounded-md border border-border-strong bg-panel-raised px-3 py-2 font-display text-xs text-foreground focus:border-accent focus:outline-none"
             />
-          ) : (
-            <div>
-              <div className="max-h-96 overflow-y-auto rounded-md border border-border bg-panel-raised px-3 py-2.5">
-                <p className="whitespace-pre-wrap font-mono text-xs text-text-dim">
-                  {generatedPrompt}
-                </p>
-              </div>
-              <p className="mt-1 text-xs text-text-dim">
-                Lecture seule — modifiable uniquement par l&apos;equipe Kaizen.
-              </p>
-            </div>
-          )}
-        </div>
+          </div>
+        ) : (
+          <div className="mb-4 rounded-md border border-border bg-panel-raised px-3 py-2.5">
+            <p className="text-xs text-text-muted">
+              Le moteur technique de ton agent est gere par l&apos;equipe Kaizen. Tu peux le tester avant de l&apos;enregistrer.
+            </p>
+          </div>
+        )}
         <div className="flex justify-between gap-3">
           <button
             type="button"
@@ -743,6 +833,7 @@ export default function AgentWizard({
               disabled={isPending || !agentName.trim()}
               onClick={() =>
                 onCreate({
+                  id: editing?.id,
                   name: agentName.trim(),
                   objectif: form.objectifDescription.trim(),
                   prompt_content: generatedPrompt,
@@ -751,7 +842,13 @@ export default function AgentWizard({
               }
               className="rounded-md border border-accent/30 bg-accent/10 px-4 py-2 text-sm font-medium text-accent transition-colors hover:bg-accent/20 disabled:opacity-50"
             >
-              {isPending ? "Creation..." : "Creer l'agent"}
+              {isPending
+                ? isEdit
+                  ? "Enregistrement..."
+                  : "Creation..."
+                : isEdit
+                  ? "Enregistrer les modifications"
+                  : "Creer l'agent"}
             </button>
           </div>
         </div>
@@ -1056,7 +1153,13 @@ export default function AgentWizard({
       <div className="flex items-center justify-between gap-3 border-t border-border pt-4">
         <button
           type="button"
-          onClick={() => (formStep === 1 ? setStep("choice") : setFormStep(formStep - 1))}
+          onClick={() =>
+            formStep === 1
+              ? isEdit
+                ? onCancel()
+                : setStep("choice")
+              : setFormStep(formStep - 1)
+          }
           className="rounded-md border border-border-strong px-4 py-2 text-sm text-text-muted hover:bg-panel-raised hover:text-foreground"
         >
           {formStep === 1 ? "Retour" : "Precedent"}
@@ -1143,6 +1246,7 @@ function TextAreaField({
   onChange,
   placeholder,
   rows = 3,
+  helper,
 }: {
   label: string;
   required?: boolean;
@@ -1150,12 +1254,14 @@ function TextAreaField({
   onChange: (v: string) => void;
   placeholder?: string;
   rows?: number;
+  helper?: string;
 }) {
   return (
     <div>
       <label className="mb-1 block text-sm font-medium text-text-muted">
         {label} {required && <span className="text-danger">*</span>}
       </label>
+      {helper && <p className="mb-1.5 text-xs text-text-dim">{helper}</p>}
       <textarea
         value={value}
         onChange={(e) => onChange(e.target.value)}

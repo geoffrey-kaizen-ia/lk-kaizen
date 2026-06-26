@@ -1,5 +1,6 @@
 export type FirstMessageAgentType = "icebreaker" | "invitation_recue";
 export type StructureMessage = "diagnostic" | "proposition_directe";
+export type LongueurAccroche = "court" | "moyen";
 
 export type FirstMessageFormData = {
   userName: string;
@@ -7,6 +8,7 @@ export type FirstMessageFormData = {
   businessDescription: string;
   sujetLegitimite: string;
   structureMessage: StructureMessage;
+  longueurAccroche: LongueurAccroche;
   cta: string;
   ctaUrl: string;
   tutoiement: boolean;
@@ -21,12 +23,25 @@ export const EMPTY_FIRST_MESSAGE_FORM: FirstMessageFormData = {
   businessDescription: "",
   sujetLegitimite: "",
   structureMessage: "diagnostic",
+  longueurAccroche: "court",
   cta: "",
   ctaUrl: "",
   tutoiement: true,
   styleDecontracte: true,
   styleExamples: [],
   additionalInstructions: "",
+};
+
+// Longueurs cibles de l'accroche, pilotables par le client (axe Geoffrey).
+// Deux crans seulement. Le nombre de caracteres ne s'affiche jamais cote client :
+// seul le libelle qualitatif est montre dans le wizard, la fourchette chiffree ne
+// vit que dans le prompt envoye au modele (voir buildIcebreakerPromptContent).
+export const LONGUEUR_ACCROCHE_LABELS: Record<
+  LongueurAccroche,
+  { title: string; hint: string }
+> = {
+  court: { title: "Court et direct", hint: "un message court qui va droit au but" },
+  moyen: { title: "Plus posé et développé", hint: "un message un peu plus posé et détaillé" },
 };
 
 export const STRUCTURE_MESSAGE_LABELS: Record<
@@ -72,11 +87,19 @@ function buildIcebreakerPromptContent(data: FirstMessageFormData): string {
     : "Registre sobre, clair et courtois, sans familiarite excessive.";
 
   const styleExamplesBlock = data.styleExamples.filter((e) => e.trim()).length
-    ? `\nTon de reference de ${data.userName}, a imiter dans le ton uniquement, jamais dans le contenu :\n${data.styleExamples
+    ? `\nTon de reference de ${data.userName}, a imiter uniquement dans le ton et le style d'ecriture, jamais dans le contenu ni dans la longueur. Ces exemples ne dictent pas la taille du message, ils ne servent qu'a calquer la maniere d'ecrire :\n${data.styleExamples
         .filter((e) => e.trim())
         .map((ex) => `- ${ex.trim()}`)
         .join("\n")}`
     : "";
+
+  const longueur = LONGUEUR_ACCROCHE_LABELS[data.longueurAccroche]
+    ? data.longueurAccroche
+    : "court";
+  const longueurConsigne =
+    longueur === "moyen"
+      ? "Vise un message un peu plus pose et developpe, autour de 350 a 500 caracteres, sans jamais devenir un pave."
+      : "Vise un message court, deux a trois phrases, autour de 250 a 350 caracteres. Va droit a l'essentiel.";
 
   const ctaPhrase =
     data.cta && data.cta.trim()
@@ -85,7 +108,7 @@ function buildIcebreakerPromptContent(data: FirstMessageFormData): string {
 
   const mouvement2 =
     mode === "diagnostic"
-      ? `Tu ouvres une seule question sur le terrain de ${data.sujetLegitimite}, et tu ajustes sa forme aux signaux du profil, sur un spectre.
+      ? `Tu ouvres une seule question sur le terrain de ${data.sujetLegitimite}, et tu ajustes sa forme aux signaux du profil, sur un spectre. La transition depuis l'accroche doit etre fluide et naturelle, jamais un virage abrupt entre une remarque et une question qui sentirait la technique commerciale.
 - Si rien n'indique de difficulte, tu poses une question ouverte et sans presomption sur la facon dont le prospect gere ce sujet aujourd'hui.
 - Si une tension est reellement visible ou exprimee par le prospect lui-meme, tu peux poser une question plus pointue, qui laisse toujours une porte de sortie honorable.
 Tu ne presumes jamais la douleur de quelqu'un qui maitrise visiblement son sujet. Un signe de reussite ou de croissance n'est pas une douleur, ne le traite jamais comme tel. La forme pointue ne se justifie que sur une tension que les donnees montrent vraiment. Tu ne proposes pas de rendez-vous, pas de lien, pas d'offre. C'est la reponse du prospect qui triera l'interet, et ${data.userName} enchainera ensuite.`
@@ -96,7 +119,7 @@ Tu ne presumes jamais la douleur de quelqu'un qui maitrise visiblement son sujet
     : "";
 
   return `<role>
-Tu rediges le premier message LinkedIn envoye a un prospect juste apres qu'il a accepte une demande de connexion. Tu ecris au nom de ${data.userName}, fondateur de ${data.businessName}, dans sa voix, jamais en ton nom propre ni au nom d'une equipe. Tu ecris en francais, sauf indication contraire explicite dans les instructions supplementaires. Tu ne te presentes jamais comme une IA, un bot ou un assistant.
+Tu rediges le premier message LinkedIn envoye a un prospect juste apres qu'il a accepte une demande de connexion. Tu ecris au nom de ${data.userName}, de ${data.businessName}, dans sa voix, jamais en ton nom propre ni au nom d'une equipe. Tu ecris en francais, sauf indication contraire explicite dans les instructions supplementaires. Tu ne te presentes jamais comme une IA, un bot ou un assistant.
 </role>
 
 <contexte>
@@ -123,7 +146,7 @@ Les donnees du profil LinkedIn du prospect t'arrivent en texte libre. Elles peuv
 Le message tient en deux mouvements, dans l'ordre, sans titre apparent, en un texte fluide et court.
 
 Mouvement 1, accroche reelle.
-Une reference precise a un element vrai du profil, avec une valorisation sincere et breve. Tu choisis l'accroche dans cet ordre de priorite, et tu ne descends d'un cran que si le cran au-dessus est absent des donnees.
+Une reference precise a un element vrai du profil, avec une observation concrete et juste sur cet element, sans compliment sur la personne ni eloge de son parcours. Pas de "tres inspirant" ni de "beau parcours", une remarque ancree dans un fait reel, pas un eloge. Tu choisis l'accroche dans cet ordre de priorite, et tu ne descends d'un cran que si le cran au-dessus est absent des donnees.
 a. un post recent publie par le prospect lui-meme
 b. une reaction ou un commentaire recent du prospect
 c. un element distinctif de son parcours ou de son a-propos
@@ -135,7 +158,7 @@ ${mouvement2}
 
 Variete organique. La forme exacte nait de la situation du profil, jamais d'un patron repete. Tu n'emploies aucune amorce recurrente, pas de "Question franche" systematique ni d'ouverture signature. Deux prospects ne recoivent jamais la meme tournure ni la meme phrase d'accroche.
 
-Longueur et forme. En mode diagnostic, deux a trois phrases courtes. En mode proposition directe, trois a cinq phrases courtes. Jamais un pave, et aucune limite de caracteres artificielle qui te ferait sacrifier le sens. Pas de tiret long ni de double tiret. Pas d'emoji, sauf si vraiment naturel et rare.
+Longueur et forme. ${longueurConsigne} Cette cible prime sur tout le reste, ne la depasse pas, meme si les exemples de ton de reference sont plus longs. Avant de produire ta reponse, verifie la longueur de ton message, s'il depasse la fourchette, raccourcis-le jusqu'a y entrer. La longueur des exemples de ton n'a aucune influence sur la taille du message, ils ne servent qu'au registre et au vocabulaire. Jamais un pave. N'utilise aucun tiret comme signe de ponctuation, ni pour une incise, ni pour relier deux idees, ni comme puce, qu'il soit long, moyen ou simple. A la place, une virgule, un point ou une parenthese. Les traits d'union a l'interieur des mots composes, comme peut-etre ou rendez-vous, restent normaux. Pas d'emoji, sauf si vraiment naturel et rare.
 
 Cloture optionnelle. Un prenom en signature si le ton s'y prete, souvent inutile dans un message court, a ne pas forcer.
 </methode>
@@ -145,7 +168,7 @@ Cloture optionnelle. Un prenom en signature si le ton s'y prete, souvent inutile
 - Tu ne te presentes jamais comme une IA, un bot ou un assistant virtuel. Tu es ${data.userName}, tu ecris en ton nom.
 - Registre non commercial. En diagnostic, aucune proposition. En proposition directe, un echange exploratoire seulement, jamais de pitch, de lien, de prix ni de rendez-vous force.
 - Zero template. Chaque message est ecrit pour ce profil precis, la variete est organique, pas une rotation de gabarits.
-- Tu imites le ton de reference, jamais son contenu.
+- Tu imites le ton et le style d'ecriture de reference, jamais son contenu ni sa longueur.
 - Profil insuffisant uniquement si les donnees sont completement vides : ni nom, ni headline, ni secteur, ni aucun ancrage reel. Dans ce cas seulement, renvoie profil_insuffisant a true. Si tu as au moins un titre de poste, une entreprise ou un secteur, tu peux toujours construire une accroche de niveau d et tu renvoies profil_insuffisant a false.
 </garde_fous>
 
