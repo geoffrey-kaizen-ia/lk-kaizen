@@ -512,6 +512,15 @@ export default function AgentWizard({
             </>
           )}
         </div>
+        {isEdit && (
+          <Field
+            label="Nom de l'agent"
+            required
+            value={fmAgentName}
+            onChange={setFmAgentName}
+            placeholder={agentType === "icebreaker" ? "Ex: Prise de contact 1" : "Ex: Remerciement invitation reçue"}
+          />
+        )}
         {agentType === "icebreaker" && (
           <TextAreaField
             label="Sur quel sujet veux-tu engager la conversation ?"
@@ -905,6 +914,15 @@ export default function AgentWizard({
       {/* Etape 1 - Identite */}
       {formStep === 1 && (
         <div className="space-y-4">
+          {isEdit && (
+            <Field
+              label="Nom de l'agent"
+              required
+              value={agentName}
+              onChange={setAgentName}
+              placeholder="Ex: Prospection dirigeants TPE"
+            />
+          )}
           <Field
             label="Ton nom (celui affiche sur ton profil LinkedIn)"
             required
