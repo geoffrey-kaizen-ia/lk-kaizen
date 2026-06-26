@@ -126,6 +126,24 @@ export default function AgentWizard({
     agentType: "conversation" | "icebreaker" | "invitation_recue";
   } | null>(null);
 
+  // Modale de test partagee par tous les ecrans du wizard. Chaque etape a son
+  // propre return : sans ce rendu commun, cliquer "Tester" sur l'ecran de
+  // previsualisation mettait a jour le state mais n'affichait aucune modale.
+  const testModal = testingAgent && (
+    testingAgent.agentType === "conversation" ? (
+      <TestAgentModal
+        agent={{ id: "test", name: testingAgent.name, prompt_content: testingAgent.prompt_content }}
+        onClose={() => setTestingAgent(null)}
+      />
+    ) : (
+      <TestFirstMessageModal
+        agent={{ id: "test", name: testingAgent.name, prompt_content: testingAgent.prompt_content }}
+        agentTypeLabel={testingAgent.agentType === "icebreaker" ? "Prise de contact" : "Invitation reçue"}
+        onClose={() => setTestingAgent(null)}
+      />
+    )
+  );
+
   function handleGenerate() {
     setStep("generating");
   }
@@ -755,6 +773,7 @@ export default function AgentWizard({
             </button>
           </div>
         </div>
+        {testModal}
       </div>
     );
   }
@@ -852,6 +871,7 @@ export default function AgentWizard({
             </button>
           </div>
         </div>
+        {testModal}
       </div>
     );
   }
@@ -1193,20 +1213,7 @@ export default function AgentWizard({
           )}
         </div>
       </div>
-      {testingAgent && (
-        testingAgent.agentType === "conversation" ? (
-          <TestAgentModal
-            agent={{ id: "test", name: testingAgent.name, prompt_content: testingAgent.prompt_content }}
-            onClose={() => setTestingAgent(null)}
-          />
-        ) : (
-          <TestFirstMessageModal
-            agent={{ id: "test", name: testingAgent.name, prompt_content: testingAgent.prompt_content }}
-            agentTypeLabel={testingAgent.agentType === "icebreaker" ? "Prise de contact" : "Invitation reçue"}
-            onClose={() => setTestingAgent(null)}
-          />
-        )
-      )}
+      {testModal}
     </div>
   );
 }
