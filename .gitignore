@@ -31,3 +31,8 @@ next-env.d.ts
 # vercel
 .vercel
 .vercel/
+
+# exports n8n bruts (contiennent des secrets en clair) : jamais versionnes.
+# Deposer les .json ici, puis lancer `node docs/n8n/sanitize.mjs` pour generer
+# les copies nettoyees dans docs/n8n/.
+/.n8n-raw/

@@ -524,7 +524,7 @@ export default function AgentsClient({
         </span>
         <div>
           <p className="text-sm font-semibold text-accent">Créer un nouvel agent</p>
-          <p className="text-xs text-text-muted">Icebreaker, conversation — guide ton prospect vers ton objectif.</p>
+          <p className="text-xs text-text-muted">Prise de contact ou conversation : guide ton prospect vers ton objectif.</p>
         </div>
       </button>
 
@@ -600,7 +600,7 @@ export default function AgentsClient({
                               ))}
                             </select>
                             {!assignmentMap["icebreaker"] && (
-                              <p className="mt-1.5 text-xs text-warning">Selectionne un agent pour que l&apos;Icebreaker fonctionne.</p>
+                              <p className="mt-1.5 text-xs text-warning">Selectionne un agent pour que la prise de contact fonctionne.</p>
                             )}
                           </div>
                         )}
@@ -828,7 +828,7 @@ export default function AgentsClient({
       {/* Archived agents */}
       {archivedAgents.length > 0 && (
         <details className="mt-8">
-          <summary className="cursor-pointer font-display text-xs uppercase tracking-widest text-text-muted hover:text-foreground">
+          <summary className="cursor-pointer font-display text-xs text-text-muted hover:text-foreground">
             Agents archives ({archivedAgents.length})
           </summary>
           <ul className="mt-3 space-y-2">
@@ -892,7 +892,7 @@ export default function AgentsClient({
         >
           <div className="w-full max-w-2xl rounded-lg border border-border bg-panel p-6 shadow-xl overscroll-contain">
             <div className="mb-5 flex items-center justify-between">
-              <h2 className="font-display text-base font-semibold uppercase tracking-widest text-foreground">
+              <h2 className="font-display text-base font-semibold text-foreground">
                 {editingWizardAgent ? "Modifier l'agent" : "Nouvel agent"}
               </h2>
               <button
@@ -929,7 +929,7 @@ export default function AgentsClient({
         >
           <div className="w-full max-w-lg rounded-lg border border-border bg-panel p-6 shadow-xl">
             <div className="mb-5 flex items-center justify-between">
-              <h2 className="font-display text-base font-semibold uppercase tracking-widest text-foreground">
+              <h2 className="font-display text-base font-semibold text-foreground">
                 {(() => {
                   const t = editingAgent ? getAgentType(editingAgent) : pendingAgentType;
                   if (t === "relance") return editingAgent ? "Modifier la relance" : "Nouvelle relance";

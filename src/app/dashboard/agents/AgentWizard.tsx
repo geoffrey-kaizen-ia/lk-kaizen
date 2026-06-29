@@ -25,9 +25,9 @@ import TestFirstMessageModal from "./TestFirstMessageModal";
 type Step = "type" | "choice" | "form" | "generating" | "preview" | "fm_mode" | "fm_form" | "fm_generating" | "fm_preview";
 
 const GENERATING_STEPS = [
-  "Analyse de tes reponses...",
-  "Compilation de la strategie commerciale...",
-  "Redaction du prompt...",
+  "Analyse de tes réponses...",
+  "Compilation de la stratégie commerciale...",
+  "Rédaction du prompt...",
 ];
 
 const STEPS = [
@@ -267,10 +267,12 @@ export default function AgentWizard({
     form.userName.trim() &&
     form.businessName.trim() &&
     form.businessDescription.trim() &&
-    form.objectifDescription.trim() &&
-    form.objectifUrl.trim();
-  const step2Valid = form.offerDescription.trim() && form.idealClient.trim();
-  const step3Valid = form.objections.some((o) => o.objection.trim());
+    form.objectifDescription.trim();
+  const step2Valid =
+    form.offerDescription.trim() && form.problemSolved.trim() && form.idealClient.trim();
+  const step3Valid =
+    form.objections.some((o) => o.objection.trim()) &&
+    form.proofPoints.some((p) => p.trim());
 
   function canGoNext(): boolean {
     if (formStep === 1) return Boolean(step1Valid);
@@ -287,7 +289,7 @@ export default function AgentWizard({
     return (
       <div>
         <p className="mb-4 text-sm text-text-muted">
-          Quel type d&apos;agent veux-tu creer ?
+          Quel type d&apos;agent veux-tu créer ?
         </p>
         <div className="space-y-3">
           <button
@@ -308,7 +310,7 @@ export default function AgentWizard({
               )}
             </div>
             <p className="mt-0.5 text-xs text-text-muted">
-              Repond aux messages de tes prospects pendant toute la discussion : il relance, repond aux questions, qualifie et amene vers ton objectif. C&apos;est l&apos;agent du role &quot;Conversation&quot;.
+              Répond aux messages de tes prospects pendant toute la discussion : il relance, répond aux questions, qualifie et amène vers ton objectif. C&apos;est l&apos;agent du rôle &quot;Conversation&quot;.
             </p>
           </button>
           <button
@@ -363,7 +365,7 @@ export default function AgentWizard({
     return (
       <div>
         <p className="mb-4 text-sm text-text-muted">
-          Choisis comment tu veux creer ton nouvel agent conversationnel.
+          Choisis comment tu veux créer ton nouvel agent conversationnel.
         </p>
         <button
           type="button"
@@ -373,9 +375,9 @@ export default function AgentWizard({
           }}
           className="w-full rounded-lg border border-accent/30 bg-accent/10 p-4 text-left transition-colors hover:border-accent/50"
         >
-          <p className="text-sm font-semibold text-foreground">Formulaire guide (recommande)</p>
+          <p className="text-sm font-semibold text-foreground">Formulaire guidé (recommandé)</p>
           <p className="mt-0.5 text-xs text-text-muted">
-            On te pose des questions etape par etape pour rassembler le maximum d&apos;infos sur ton offre, ta cible et tes objections. Plus tu remplis, meilleur sera ton agent. Tu pourras relire le prompt avant de creer l&apos;agent.
+            On te pose des questions étape par étape pour rassembler le maximum d&apos;infos sur ton offre, ta cible et tes objections. Plus tu remplis, meilleur sera ton agent. Tu pourras relire le prompt avant de créer l&apos;agent.
           </p>
         </button>
         <div className="mt-5 flex items-center justify-between">
@@ -392,7 +394,7 @@ export default function AgentWizard({
               }
               className="text-xs text-text-dim underline-offset-2 hover:text-text-muted hover:underline"
             >
-              Ou creer un agent vierge (avance)
+              Ou créer un agent vierge (avancé)
             </button>
           )}
           {!canEditPrompt && <span />}
@@ -422,10 +424,10 @@ export default function AgentWizard({
     return (
       <div>
         <p className="mb-1 text-base font-semibold text-foreground">
-          Quel type d&apos;agent veux-tu creer ?
+          Quel type d&apos;agent veux-tu créer ?
         </p>
         <p className="mb-4 text-xs text-text-muted">
-          Dans les deux cas, l&apos;agent lit le profil du prospect et personnalise chaque message a partir d&apos;un element reel. Ce qui change, c&apos;est la facon d&apos;ouvrir.
+          Dans les deux cas, l&apos;agent lit le profil du prospect et personnalise chaque message à partir d&apos;un élément réel. Ce qui change, c&apos;est la façon d&apos;ouvrir.
         </p>
         <div className="space-y-3">
           {(Object.entries(STRUCTURE_MESSAGE_LABELS) as [StructureMessage, { title: string; description: string; example: string }][]).map(
@@ -533,25 +535,25 @@ export default function AgentWizard({
           />
         )}
         <Field
-          label="Ton nom (celui affiche sur ton profil LinkedIn)"
+          label="Ton nom (celui affiché sur ton profil LinkedIn)"
           required
           value={fmForm.userName}
           onChange={(v) => updateFmField("userName", v)}
           placeholder="Ex: Jean Dupont"
         />
         <Field
-          label="Nom de ton business"
+          label="Nom de ton entreprise"
           required
           value={fmForm.businessName}
           onChange={(v) => updateFmField("businessName", v)}
           placeholder="Ex: nom de ton entreprise"
         />
         <TextAreaField
-          label="Description de ton activite"
+          label="Description de ton activité"
           required
           value={fmForm.businessDescription}
           onChange={(v) => updateFmField("businessDescription", v)}
-          placeholder="Explique ton activite, ce que tu fais et pour qui. L'agent s'en sert pour se situer, jamais pour en faire un argumentaire de vente."
+          placeholder="Explique ton activité, ce que tu fais et pour qui. L'agent s'en sert pour se situer, jamais pour en faire un argumentaire de vente."
           rows={4}
         />
         {agentType === "icebreaker" && fmForm.structureMessage === "proposition_directe" && (
@@ -584,7 +586,7 @@ export default function AgentWizard({
             </select>
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium text-text-muted">Style de message</label>
+            <label className="mb-1 block text-sm font-medium text-text-muted">Style d&apos;écriture</label>
             <select
               value={fmForm.styleDecontracte ? "decontracte" : "formel"}
               onChange={(e) => updateFmField("styleDecontracte", e.target.value === "decontracte")}
@@ -630,16 +632,16 @@ export default function AgentWizard({
           </div>
         )}
         <ListField
-          label="Exemples de ta facon de t'exprimer (optionnel)"
+          label="Exemples de ta façon de t'exprimer (optionnel)"
           helper="Quelques phrases types pour que l'IA reprenne ton style d'écriture. Elles influencent le ton et la forme, jamais la longueur du message."
           items={fmForm.styleExamples}
           onAdd={addFmStyleExample}
           onChange={updateFmStyleExample}
           onRemove={removeFmStyleExample}
-          placeholder="Ex: ah ok ca marche"
+          placeholder="Ex : avec plaisir, je reviens vers vous rapidement"
         />
         <TextAreaField
-          label="Instructions supplementaires (optionnel)"
+          label="Instructions supplémentaires (optionnel)"
           helper="Des règles précises que l'agent doit toujours respecter sur ce premier message. Ex : ne jamais mentionner les tarifs, toujours citer notre certification, éviter le mot 'partenariat', ne pas parler de notre concurrent X, écrire en anglais si le profil est anglophone."
           value={fmForm.additionalInstructions}
           onChange={(v) => updateFmField("additionalInstructions", v)}
@@ -669,7 +671,7 @@ export default function AgentWizard({
               onClick={() => setStep("fm_generating")}
               className="rounded-md border border-accent/30 bg-accent/10 px-4 py-2 text-sm font-medium text-accent transition-colors hover:bg-accent/20 disabled:opacity-50"
             >
-              Générer le prompt
+              {canEditPrompt ? "Générer le prompt" : "Créer l'agent"}
             </button>
           </div>
         </div>
@@ -695,8 +697,8 @@ export default function AgentWizard({
       <div>
         <p className="mb-3 text-sm text-text-muted">
           {canEditPrompt
-            ? "Voici le prompt genere a partir de tes reponses. Relis-le et ajuste-le si besoin."
-            : "Ton agent est pret. Donne-lui un nom, teste-le sur un profil, puis enregistre-le."}
+            ? "Voici le prompt généré à partir de tes réponses. Relis-le et ajuste-le si besoin."
+            : "Ton agent est prêt. Donne-lui un nom, teste-le sur un profil, puis enregistre-le."}
         </p>
         <div className="mb-4">
           <label className="mb-1 block text-sm font-medium text-text-muted">
@@ -712,7 +714,7 @@ export default function AgentWizard({
         </div>
         {canEditPrompt ? (
           <div className="mb-4">
-            <label className="mb-1 block text-sm font-medium text-text-muted">Prompt genere</label>
+            <label className="mb-1 block text-sm font-medium text-text-muted">Prompt généré</label>
             <textarea
               value={fmGeneratedPrompt}
               onChange={(e) => setFmGeneratedPrompt(e.target.value)}
@@ -723,7 +725,7 @@ export default function AgentWizard({
         ) : (
           <div className="mb-4 rounded-md border border-border bg-panel-raised px-3 py-2.5">
             <p className="text-xs text-text-muted">
-              Le moteur technique de ton agent est gere par l&apos;equipe Kaizen. Tu peux le tester avant de l&apos;enregistrer.
+              Le moteur technique de ton agent est géré par l&apos;équipe Kaizen. Tu peux le tester avant de l&apos;enregistrer.
             </p>
           </div>
         )}
@@ -749,7 +751,7 @@ export default function AgentWizard({
               onClick={() =>
                 setTestingAgent({
                   id: "test",
-                  name: fmAgentName.trim() || "Agent en cours de creation",
+                  name: fmAgentName.trim() || "Agent en cours de création",
                   prompt_content: fmGeneratedPrompt,
                   agentType: agentType as "icebreaker" | "invitation_recue",
                 })
@@ -775,10 +777,10 @@ export default function AgentWizard({
               {isPending
                 ? isEdit
                   ? "Enregistrement..."
-                  : "Creation..."
+                  : "Création..."
                 : isEdit
                   ? "Enregistrer les modifications"
-                  : "Creer l'agent"}
+                  : "Créer l'agent"}
             </button>
           </div>
         </div>
@@ -793,8 +795,8 @@ export default function AgentWizard({
       <div>
         <p className="mb-3 text-sm text-text-muted">
           {canEditPrompt
-            ? "Voici le prompt genere a partir de tes reponses. Relis-le et ajuste-le si besoin."
-            : "Ton agent est pret. Donne-lui un nom, teste-le, puis enregistre-le."}
+            ? "Voici le prompt généré à partir de tes réponses. Relis-le et ajuste-le si besoin."
+            : "Ton agent est prêt. Donne-lui un nom, teste-le, puis enregistre-le."}
         </p>
         <div className="mb-4">
           <label className="mb-1 block text-sm font-medium text-text-muted">
@@ -810,7 +812,7 @@ export default function AgentWizard({
         </div>
         {canEditPrompt ? (
           <div className="mb-4">
-            <label className="mb-1 block text-sm font-medium text-text-muted">Prompt genere</label>
+            <label className="mb-1 block text-sm font-medium text-text-muted">Prompt généré</label>
             <textarea
               value={generatedPrompt}
               onChange={(e) => setGeneratedPrompt(e.target.value)}
@@ -821,7 +823,7 @@ export default function AgentWizard({
         ) : (
           <div className="mb-4 rounded-md border border-border bg-panel-raised px-3 py-2.5">
             <p className="text-xs text-text-muted">
-              Le moteur technique de ton agent est gere par l&apos;equipe Kaizen. Tu peux le tester avant de l&apos;enregistrer.
+              Le moteur technique de ton agent est géré par l&apos;équipe Kaizen. Tu peux le tester avant de l&apos;enregistrer.
             </p>
           </div>
         )}
@@ -847,7 +849,7 @@ export default function AgentWizard({
               onClick={() =>
                 setTestingAgent({
                   id: "test",
-                  name: agentName.trim() || "Agent en cours de creation",
+                  name: agentName.trim() || "Agent en cours de création",
                   prompt_content: generatedPrompt,
                   agentType: "conversation",
                 })
@@ -873,10 +875,10 @@ export default function AgentWizard({
               {isPending
                 ? isEdit
                   ? "Enregistrement..."
-                  : "Creation..."
+                  : "Création..."
                 : isEdit
                   ? "Enregistrer les modifications"
-                  : "Creer l'agent"}
+                  : "Créer l'agent"}
             </button>
           </div>
         </div>
@@ -924,25 +926,25 @@ export default function AgentWizard({
             />
           )}
           <Field
-            label="Ton nom (celui affiche sur ton profil LinkedIn)"
+            label="Ton nom (celui affiché sur ton profil LinkedIn)"
             required
             value={form.userName}
             onChange={(v) => updateField("userName", v)}
             placeholder="Ex: Jean Dupont"
           />
           <Field
-            label="Nom de ton business"
+            label="Nom de ton entreprise"
             required
             value={form.businessName}
             onChange={(v) => updateField("businessName", v)}
             placeholder="Ex: nom de ton entreprise"
           />
           <TextAreaField
-            label="Description de ton activite"
+            label="Description de ton activité"
             required
             value={form.businessDescription}
             onChange={(v) => updateField("businessDescription", v)}
-            placeholder="Explique ton activite en quelques lignes : ce que tu fais, depuis quand, pour qui."
+            placeholder="Explique ton activité en quelques lignes : ce que tu fais, depuis quand, pour qui."
             rows={4}
           />
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -954,11 +956,10 @@ export default function AgentWizard({
               placeholder='Ex: "Prendre un rdv"'
             />
             <Field
-              label="URL de l'objectif"
-              required
+              label="URL de l'objectif (optionnel)"
               value={form.objectifUrl}
               onChange={(v) => updateField("objectifUrl", v)}
-              placeholder="Ex: lien Calendly"
+              placeholder="Ex: lien Calendly (laisser vide si tu cales le rdv toi-même)"
             />
           </div>
         </div>
@@ -968,36 +969,37 @@ export default function AgentWizard({
       {formStep === 2 && (
         <div className="space-y-4">
           <p className="text-xs text-text-dim">
-            Ces infos sont le carburant de ton agent. Plus elles sont precises, plus les reponses seront pertinentes.
+            Ces infos sont le carburant de ton agent. Plus elles sont précises, plus les réponses seront pertinentes.
           </p>
           <TextAreaField
             label="Offre principale"
             required
             value={form.offerDescription}
             onChange={(v) => updateField("offerDescription", v)}
-            placeholder="Decris precisement ce que tu vends : le produit/service, ce qu'il inclut, comment ca marche."
+            placeholder="Décris précisément ce que tu vends : le produit/service, ce qu'il inclut, comment ça marche."
             rows={4}
           />
           <TextAreaField
-            label="Probleme que tu resous"
+            label="Problème que tu résous"
+            required
             value={form.problemSolved}
             onChange={(v) => updateField("problemSolved", v)}
-            placeholder="Quel probleme concret ton offre resout pour le client ?"
+            placeholder="Quel problème concret ton offre résout pour le client ?"
             rows={3}
           />
           <TextAreaField
-            label="Client ideal (ICP)"
+            label="Client idéal (ICP)"
             required
             value={form.idealClient}
             onChange={(v) => updateField("idealClient", v)}
-            placeholder="Decris ton client type : secteur, taille d'entreprise, poste, situation, ce qui le caracterise."
+            placeholder="Décris ton client type : secteur, taille d'entreprise, poste, situation, ce qui le caractérise."
             rows={3}
           />
           <TextAreaField
             label="Positionnement tarifaire (optionnel)"
             value={form.pricePositioning}
             onChange={(v) => updateField("pricePositioning", v)}
-            placeholder="Ex: offre premium, entree de gamme... (les prix ne seront jamais devoiles en conversation)"
+            placeholder="Ex: offre premium, entrée de gamme... (les prix ne seront jamais dévoilés en conversation)"
             rows={2}
           />
         </div>
@@ -1007,21 +1009,22 @@ export default function AgentWizard({
       {formStep === 3 && (
         <div className="space-y-4">
           <ListField
-            label="Preuves & resultats (optionnel)"
-            helper="Resultats clients, chiffres, references. Cree de la confiance dans la conversation."
+            label="Preuves & resultats"
+            required
+            helper="Au moins une, chiffrée et vérifiable : c'est le carburant de l'agent pour créer de la confiance. Bonne preuve : '12 cabinets accompagnés, +30% de rdv signés en 2025'. Mauvaise preuve : 'des centaines de clients satisfaits' (invérifiable, sans valeur)."
             items={form.proofPoints}
             onAdd={() => addListItem("proofPoints")}
             onChange={(i, v) => updateListItem("proofPoints", i, v)}
             onRemove={(i) => removeListItem("proofPoints", i)}
-            placeholder="Ex: +30 clients accompagnes en 2025"
+            placeholder="Ex: +30 clients accompagnés en 2025"
           />
 
           <div>
             <label className="mb-1 block text-sm font-medium text-text-muted">
-              Objections frequentes <span className="text-danger">*</span>
+              Objections fréquentes <span className="text-danger">*</span>
             </label>
             <p className="mb-2 text-xs text-text-muted">
-              Les objections que tes prospects soulevent souvent, et comment y repondre. Au moins une est requise.
+              Les objections que tes prospects soulèvent souvent, et comment y répondre. Au moins une est requise.
             </p>
             <div className="space-y-3">
               {form.objections.map((item, i) => (
@@ -1048,7 +1051,7 @@ export default function AgentWizard({
                     onChange={(e) => updateObjection(i, "reponse", e.target.value)}
                     rows={2}
                     className="w-full rounded-md border border-border-strong bg-panel px-3 py-2 text-sm text-foreground focus:border-accent focus:outline-none"
-                    placeholder="Ta reponse a cette objection."
+                    placeholder="Ta réponse à cette objection."
                   />
                 </div>
               ))}
@@ -1065,7 +1068,7 @@ export default function AgentWizard({
           <div>
             <label className="mb-1 block text-sm font-medium text-text-muted">FAQ (optionnel)</label>
             <p className="mb-2 text-xs text-text-muted">
-              Questions que les prospects posent souvent, avec ta reponse.
+              Questions que les prospects posent souvent, avec ta réponse.
             </p>
             <div className="space-y-3">
               {form.faq.map((item, i) => (
@@ -1092,7 +1095,7 @@ export default function AgentWizard({
                     onChange={(e) => updateFaq(i, "reponse", e.target.value)}
                     rows={2}
                     className="w-full rounded-md border border-border-strong bg-panel px-3 py-2 text-sm text-foreground focus:border-accent focus:outline-none"
-                    placeholder="Ta reponse."
+                    placeholder="Ta réponse."
                   />
                 </div>
               ))}
@@ -1124,14 +1127,18 @@ export default function AgentWizard({
               </select>
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-text-muted">Style de conversation</label>
+              <label className="mb-1 block text-sm font-medium text-text-muted">Style d&apos;écriture</label>
               <select
                 value={form.styleDecontracte ? "decontracte" : "formel"}
                 onChange={(e) => updateField("styleDecontracte", e.target.value === "decontracte")}
                 className="w-full rounded-md border border-border-strong bg-panel-raised px-3 py-2 text-sm text-foreground focus:border-accent focus:outline-none"
               >
-                <option value="decontracte">Décontracté (ex : &quot;t&apos;as ?&quot;)</option>
-                <option value="formel">Formel (ex: &quot;as-tu ?&quot;)</option>
+                <option value="decontracte">
+                  {form.tutoiement ? "Décontracté (ex : t'as ?)" : "Décontracté (ex : vous avez ?)"}
+                </option>
+                <option value="formel">
+                  {form.tutoiement ? "Formel (ex : as-tu ?)" : "Formel (ex : avez-vous ?)"}
+                </option>
               </select>
             </div>
           </div>
@@ -1150,13 +1157,13 @@ export default function AgentWizard({
             </select>
           </div>
           <ListField
-            label="Exemples de ta facon de t'exprimer (optionnel)"
+            label="Exemples de ta façon de t'exprimer (optionnel)"
             helper="Quelques phrases types pour que l'IA reprenne ton style."
             items={form.styleExamples}
             onAdd={() => addListItem("styleExamples")}
             onChange={(i, v) => updateListItem("styleExamples", i, v)}
             onRemove={(i) => removeListItem("styleExamples", i)}
-            placeholder="Ex: ah ok ca marche"
+            placeholder="Ex : avec plaisir, je reviens vers vous rapidement"
           />
         </div>
       )}
@@ -1165,22 +1172,22 @@ export default function AgentWizard({
       {formStep === 5 && (
         <div className="space-y-4">
           <ListField
-            label="Criteres importants (optionnel)"
-            helper="Un ou deux criteres vraiment importants. L'agent ne pose une question de qualification que s'il lui en manque un au moment de proposer, jamais une batterie de questions."
+            label="Critères importants (optionnel)"
+            helper="Un ou deux critères vraiment importants. L'agent ne pose une question de qualification que s'il lui en manque un au moment de proposer, jamais une batterie de questions."
             items={form.qualificationCriteria}
             onAdd={() => addListItem("qualificationCriteria")}
             onChange={(i, v) => updateListItem("qualificationCriteria", i, v)}
             onRemove={(i) => removeListItem("qualificationCriteria", i)}
-            placeholder="Ex: Travaille deja dans la vente"
+            placeholder="Ex: Travaille déjà dans la vente"
           />
           <ListField
-            label="Criteres de disqualification"
-            helper="Si le prospect correspond a l'un de ces points, on arrete poliment."
+            label="Critères de disqualification"
+            helper="Si le prospect correspond à l'un de ces points, on arrête poliment."
             items={form.disqualificationCriteria}
             onAdd={() => addListItem("disqualificationCriteria")}
             onChange={(i, v) => updateListItem("disqualificationCriteria", i, v)}
             onRemove={(i) => removeListItem("disqualificationCriteria", i)}
-            placeholder="Ex: Etudiant sans activite"
+            placeholder="Ex: Étudiant sans activité"
           />
           <ListField
             label="A ne jamais dire ni promettre (optionnel)"
@@ -1189,13 +1196,13 @@ export default function AgentWizard({
             onAdd={() => addListItem("neverSay")}
             onChange={(i, v) => updateListItem("neverSay", i, v)}
             onRemove={(i) => removeListItem("neverSay", i)}
-            placeholder="Ex: ne jamais promettre un resultat garanti"
+            placeholder="Ex: ne jamais promettre un résultat garanti"
           />
           <TextAreaField
-            label="Instructions supplementaires (optionnel)"
+            label="Instructions supplémentaires (optionnel)"
             value={form.additionalInstructions}
             onChange={(v) => updateField("additionalInstructions", v)}
-            placeholder="Regles ou contexte que l'IA doit absolument connaitre."
+            placeholder="Règles ou contexte que l'IA doit absolument connaître."
             rows={3}
           />
           <div>
@@ -1240,7 +1247,7 @@ export default function AgentWizard({
           }
           className="rounded-md border border-border-strong px-4 py-2 text-sm text-text-muted hover:bg-panel-raised hover:text-foreground"
         >
-          {formStep === 1 ? "Retour" : "Precedent"}
+          {formStep === 1 ? "Retour" : "Précédent"}
         </button>
         <div className="flex gap-3">
           <button
@@ -1266,7 +1273,7 @@ export default function AgentWizard({
               onClick={handleGenerate}
               className="rounded-md border border-accent/30 bg-accent/10 px-4 py-2 text-sm font-medium text-accent transition-colors hover:bg-accent/20 disabled:opacity-50"
             >
-              Générer le prompt
+              {canEditPrompt ? "Générer le prompt" : "Créer l'agent"}
             </button>
           )}
         </div>
@@ -1346,6 +1353,7 @@ function ListField({
   onChange,
   onRemove,
   placeholder,
+  required,
 }: {
   label: string;
   helper: string;
@@ -1354,10 +1362,13 @@ function ListField({
   onChange: (index: number, value: string) => void;
   onRemove: (index: number) => void;
   placeholder: string;
+  required?: boolean;
 }) {
   return (
     <div>
-      <label className="mb-1 block text-sm font-medium text-text-muted">{label}</label>
+      <label className="mb-1 block text-sm font-medium text-text-muted">
+        {label} {required && <span className="text-danger">*</span>}
+      </label>
       <p className="mb-2 text-xs text-text-muted">{helper}</p>
       <div className="space-y-2">
         {items.map((item, i) => (

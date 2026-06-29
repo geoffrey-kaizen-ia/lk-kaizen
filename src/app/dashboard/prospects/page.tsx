@@ -70,7 +70,7 @@ export default async function ProspectsPage() {
         selectedResults={selectedResults ?? []}
         invitedResults={invitedRows ?? []}
         invitesToday={invitesToday ?? 0}
-        dailyInviteLimit={clientConfig?.daily_invite_limit ?? 25}
+        dailyInviteLimit={clientConfig?.daily_invite_limit ?? 20}
         messagesToday={messagesToday ?? 0}
         dailyMessageLimit={clientConfig?.daily_message_limit ?? 40}
       />

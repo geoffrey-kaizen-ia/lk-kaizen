@@ -187,12 +187,12 @@ export default function Sidebar({
                     : "bg-danger shadow-[0_0_6px_var(--danger)]"
                 }`}
               />
-              <span className="font-display text-[10px] uppercase tracking-widest text-text-muted">
+              <span className="font-display text-[10px] text-text-muted">
                 {aiActive ? "IA active" : "IA en pause"}
               </span>
             </div>
             <span
-              className={`font-display text-[10px] font-semibold uppercase tracking-widest ${
+              className={`font-display text-[10px] font-semibold ${
                 aiActive ? "text-text-dim" : "text-accent"
               }`}
             >
@@ -216,7 +216,7 @@ export default function Sidebar({
           {isLinkedinConnected ? (
             <div className="flex items-center gap-2">
               <span className="h-2 w-2 rounded-full bg-positive shadow-[0_0_6px_var(--positive)]" />
-              <span className="font-display text-[10px] uppercase tracking-widest text-text-muted">
+              <span className="font-display text-[10px] text-text-muted">
                 LinkedIn online
               </span>
             </div>
@@ -227,7 +227,7 @@ export default function Sidebar({
                   <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-danger opacity-75" />
                   <span className="relative inline-flex h-2 w-2 rounded-full bg-danger" />
                 </span>
-                <span className="font-display text-[10px] uppercase tracking-widest text-text-muted">
+                <span className="font-display text-[10px] text-text-muted">
                   LinkedIn offline
                 </span>
               </div>

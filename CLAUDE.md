@@ -179,6 +179,8 @@ Le client a un CRUD complet sur SES relances (RLS granulaire par account_id, pas
 
 ## Pipeline n8n (hors repo, mais le dashboard en dépend)
 
+Les JSON complets des workflows n8n vivent dans `docs/n8n/`. Lire `docs/n8n/README.md` EN PREMIER pour savoir quel workflow consulter (tableau nom -> ID -> fichier -> rôle -> date d'export) avant de répondre à toute question liée à un workflow. Toujours regarder la date « Dernier export » : si elle est vieille ou absente, le signaler plutôt que d'affirmer. Un export n8n peut contenir des secrets en clair : signaler tout secret repéré avant tout commit (jamais la `service_role` dans ce repo).
+
 - Workflow Icebreaker (id `0yQOYs1Ffiqtj4IX`) : webhook Unipile `new_relation`, envoie le 1er message
 - Workflow Conversation (id `fsSw8bIknV1cAgKx`) : webhook Unipile `message_received`, génère la réponse via l'agent assigné au rôle `conversation`
 - Garde-fous du workflow Conversation : event=message_received, is_sender=false, message non vide, rejet WhatsApp, IA active, processing_status=idle

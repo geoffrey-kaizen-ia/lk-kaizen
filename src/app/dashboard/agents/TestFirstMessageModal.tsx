@@ -100,7 +100,7 @@ export default function TestFirstMessageModal({
         {/* Header */}
         <div className="flex items-center justify-between border-b border-border px-5 py-4">
           <div>
-            <h2 className="font-display text-base font-semibold uppercase tracking-widest text-foreground">
+            <h2 className="font-display text-base font-semibold text-foreground">
               Tester {agent.name ?? "l&apos;agent"}
             </h2>
             <p className="mt-0.5 text-xs text-text-muted">

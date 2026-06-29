@@ -26,8 +26,8 @@ export const EMPTY_FIRST_MESSAGE_FORM: FirstMessageFormData = {
   longueurAccroche: "court",
   cta: "",
   ctaUrl: "",
-  tutoiement: true,
-  styleDecontracte: true,
+  tutoiement: false,
+  styleDecontracte: false,
   styleExamples: [],
   additionalInstructions: "",
 };

@@ -107,7 +107,7 @@ export default function StatsClient({
           onChange={(e) => updateFilter("period", e.target.value)}
           className="rounded-md border border-border-strong bg-panel-raised px-3 py-2 font-display text-xs text-text-muted focus:border-accent focus:outline-none"
         >
-          <option value="all">Toute la periode</option>
+          <option value="all">Toute la période</option>
           <option value="7">7 derniers jours</option>
           <option value="30">30 derniers jours</option>
         </select>
@@ -127,12 +127,12 @@ export default function StatsClient({
 
       {/* Résultats */}
       <div className="mb-2">
-        <p className="mb-3 font-display text-xs font-semibold uppercase tracking-[0.2em] text-text-dim">
-          Resultats
+        <p className="mb-3 font-display text-xs font-semibold text-text-dim">
+          Résultats
         </p>
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
           <StatCard
-            label="Invitations acceptees"
+            label="Invitations acceptées"
             value={totalAccepted.toString()}
             accent="positive"
           />
@@ -156,8 +156,8 @@ export default function StatsClient({
 
       {/* Actions envoyées */}
       <div className="mb-6 mt-5">
-        <p className="mb-3 font-display text-xs font-semibold uppercase tracking-[0.2em] text-text-dim">
-          Actions envoyees
+        <p className="mb-3 font-display text-xs font-semibold text-text-dim">
+          Actions envoyées
         </p>
         <div className="grid grid-cols-2 gap-4">
           <StatCard
@@ -177,12 +177,12 @@ export default function StatsClient({
 
       {/* Graphique messages recus / envoyes */}
       <div className="mb-6 rounded-lg border border-border bg-panel p-5">
-        <h2 className="mb-4 font-display text-xs font-semibold uppercase tracking-[0.2em] text-text-muted">
-          Messages recus / envoyes ({totalInbound} / {totalOutbound})
+        <h2 className="mb-4 font-display text-xs font-semibold text-text-muted">
+          Messages reçus / envoyés ({totalInbound} / {totalOutbound})
         </h2>
         {messagesData.length === 0 ? (
           <p className="py-8 text-center text-sm text-text-muted">
-            Pas encore de donnees.
+            Pas encore de données.
           </p>
         ) : (
           <div className="h-72 w-full">
@@ -228,12 +228,12 @@ export default function StatsClient({
 
       {/* Graphique d'evolution */}
       <div className="mb-6 rounded-lg border border-border bg-panel p-5">
-        <h2 className="mb-4 font-display text-xs font-semibold uppercase tracking-[0.2em] text-text-muted">
-          Evolution par periode
+        <h2 className="mb-4 font-display text-xs font-semibold text-text-muted">
+          Évolution par période
         </h2>
         {evolutionData.length === 0 ? (
           <p className="py-8 text-center text-sm text-text-muted">
-            Pas encore de donnees.
+            Pas encore de données.
           </p>
         ) : (
           <div className="h-72 w-full">
@@ -277,14 +277,14 @@ export default function StatsClient({
         )}
       </div>
 
-      {/* Tableau des periodes */}
+      {/* Tableau des périodes */}
       <div className="rounded-lg border border-border bg-panel p-5">
-        <h2 className="mb-4 font-display text-xs font-semibold uppercase tracking-[0.2em] text-text-muted">
-          Detail par periode ({periodCount})
+        <h2 className="mb-4 font-display text-xs font-semibold text-text-muted">
+          Détail par période ({periodCount})
         </h2>
         {periods.length === 0 ? (
           <p className="py-8 text-center text-sm text-text-muted">
-            Pas encore de donnees.
+            Pas encore de données.
           </p>
         ) : (
           <div className="overflow-x-auto">
@@ -292,9 +292,9 @@ export default function StatsClient({
               <thead>
                 <tr className="border-b border-border text-left font-display text-xs uppercase tracking-wider text-text-dim">
                   <th className="py-2.5 pl-3 pr-4 font-medium">
-                    Debut periode
+                    Début période
                   </th>
-                  <th className="py-2.5 pr-4 font-medium">Fin periode</th>
+                  <th className="py-2.5 pr-4 font-medium">Fin période</th>
                   <th className="py-2.5 pr-4 text-right font-medium">
                     Envoyes
                   </th>
@@ -362,7 +362,7 @@ function StatCard({
   return (
     <div className="relative overflow-hidden rounded-lg border border-border bg-panel px-5 py-5 text-center">
       <span className={`absolute inset-x-0 top-0 h-0.5 ${style.bar}`} />
-      <p className="mb-2 font-display text-xs font-medium uppercase tracking-[0.2em] text-text-dim">
+      <p className="mb-2 font-display text-xs font-medium text-text-dim">
         {label}
       </p>
       <p className={`font-display tabular-nums ${small ? "text-2xl font-medium text-text-muted" : `text-4xl font-semibold ${style.text} ${style.glow}`}`}>

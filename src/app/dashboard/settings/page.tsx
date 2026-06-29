@@ -26,7 +26,7 @@ export default async function SettingsPage() {
         Cadence et securite du compte LinkedIn.
       </p>
       <SettingsClient
-        dailyInviteLimit={config?.daily_invite_limit ?? 25}
+        dailyInviteLimit={config?.daily_invite_limit ?? 20}
         dailyMessageLimit={config?.daily_message_limit ?? 40}
         responseDelayMode={config?.response_delay_mode ?? "normal"}
         activeHoursStart={config?.active_hours_start ?? 9}

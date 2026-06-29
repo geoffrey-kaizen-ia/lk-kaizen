@@ -1,0 +1,1358 @@
+{
+  "name": "Kaizen - Icebreaker LinkedIn",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "unipile-new-relation",
+        "options": {
+          "noResponseBody": true
+        }
+      },
+      "id": "c24e7e14-73dc-47c8-8d18-c1d9a1c20bff",
+      "name": "Unipile - Connexion acceptee",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -480,
+        -336
+      ],
+      "webhookId": "f6d9182a-4bf0-419e-a10a-6ec3ab2d0da9"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.account_type }}",
+              "rightValue": "LINKEDIN",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              },
+              "id": "62d1aae0-f69e-46cb-9805-8538a83741ef"
+            },
+            {
+              "id": "4a033810-353a-45ec-8316-b76f9f0ee776",
+              "leftValue": "={{ $json.account_id }}",
+              "rightValue": "BY85po44SUyPqFR8pbrm0Q",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "e872b670-ee4a-451e-8f0f-23e8c21563bb",
+      "name": "IF - Exclure compte test (Geoffrey)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -32,
+        -336
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "lk_clients_config",
+        "limit": 1,
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "account_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Code in JavaScript').item.json.account_id }}"
+            },
+            {
+              "keyName": "ai_enabled",
+              "condition": "is",
+              "keyValue": "TRUE"
+            }
+          ]
+        }
+      },
+      "id": "1bc91928-ac29-4e9b-a469-e360d252e653",
+      "name": "Supabase - Config client",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        192,
+        -336
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": "mWip0WqnB57aANW3",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "lk_agent_assignments",
+        "limit": 1,
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "account_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Code in JavaScript').item.json.account_id }}"
+            },
+            {
+              "keyName": "role",
+              "condition": "eq",
+              "keyValue": "icebreaker"
+            }
+          ]
+        }
+      },
+      "id": "e795391a-1f09-40c7-a54f-f4ce507e20ed",
+      "name": "Supabase - Assignation icebreaker",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        416,
+        -336
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": "mWip0WqnB57aANW3",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "lk_agents",
+        "limit": 1,
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $(\"Supabase - Assignation icebreaker\").item.json.agent_id }}"
+            }
+          ]
+        }
+      },
+      "id": "cc2d0d7e-69cd-4080-8b0f-4058fd3fa41a",
+      "name": "Supabase - Prompt icebreaker",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        864,
+        -336
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": "mWip0WqnB57aANW3",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "=https://api22.unipile.com:15267/api/v1/users/{{ $('Code in JavaScript').item.json.user_provider_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "account_id",
+              "value": "={{ $json.account_id }}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "df378fdd-4fd6-4121-a3c1-4da5ff8ae5be",
+      "name": "Unipile - Profil prospect",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1088,
+        -432
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "mNQkc2EST14d7fGl",
+          "name": "Unipile API - LinkedIn"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "id": "a1cf162a-2252-46e9-8b01-38a34dc524c2",
+      "name": "Merge - Profil et posts",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1312,
+        -336
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://api22.unipile.com:15267/api/v1/users/{{ $('Code in JavaScript').item.json.user_provider_id }}/posts",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "account_id",
+              "value": "={{ $json.account_id }}"
+            },
+            {
+              "name": "limit",
+              "value": "5"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "b49047cd-1edc-49af-9a78-cbd4be5c06da",
+      "name": "Unipile - Posts prospect",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1088,
+        -240
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "mNQkc2EST14d7fGl",
+          "name": "Unipile API - LinkedIn"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "\nconst webhook = $('Unipile - Connexion acceptee').item.json.body;\nconst profile = $('Unipile - Profil prospect').item.json;\nconst posts = $('Unipile - Posts prospect').item.json;\n\nconst postTexts = (posts.items || [])\n  .slice(0, 3)\n  .map(p => p.text || p.content || '')\n  .filter(t => t && t.length > 20)\n  .join('\\n---\\n');\n\nconst lines = [\n  'Nom: ' + webhook.user_full_name,\n  'Poste: ' + (profile.headline || profile.occupation || ''),\n  'Entreprise: ' + (profile.company_name || profile.company || ''),\n  'Localisation: ' + (profile.location || ''),\n];\n\nif (postTexts) {\n  lines.push('Publications recentes:');\n  lines.push(postTexts);\n}\n\nconst profileSummary = lines.filter(l => l && !l.endsWith(': ')).join('\\n');\n\nreturn {\n  account_id: webhook.account_id,\n  linkedin_id: webhook.user_provider_id,\n  full_name: webhook.user_full_name,\n  linkedin_url: webhook.user_profile_url,\n  profile_picture_url: webhook.user_picture_url,\n  occupation: profile.headline || profile.occupation || '',\n  company_name: profile.company_name || profile.company || '',\n  location: profile.location || '',\n  profile_summary: profileSummary,\n};\n"
+      },
+      "id": "d1edfeab-00ba-43fe-92bb-8ab2b288dda7",
+      "name": "Code - Resume profil",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1536,
+        -336
+      ]
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "claude-sonnet-4-6"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=Voilà le profil du prospect :\nPrénom : {{ $('Unipile - Profil prospect').item.json.first_name }}\nHeadline : {{ $('Unipile - Profil prospect').item.json.headline }}\n\nRésumé du profil :{{ $json.profile_summary }}"
+            }
+          ]
+        },
+        "options": {
+          "system": "=PROMPT SYSTÈME — AGENT 1 LINKEDIN (BRISE-GLACE / PREMIER MESSAGE) — GEOFFREY CUBEROS / KAIZEN IA\nVERSION V1.2 — VERROUILLÉE\n\nTu écris des premiers messages de prospection LinkedIn à froid, envoyés depuis le compte personnel de Geoffrey CUBEROS.\n\nTa mission est extrêmement précise :\n- briser la glace,\n- susciter une réponse,\n- créer une impression de message réellement humain et contextualisé,\n- protéger la crédibilité personnelle de Geoffrey,\n- ouvrir une conversation naturelle,\n- sans vendre, sans pitcher, sans proposer de rendez-vous.\n\nTu n’es PAS un SDR agressif.\nTu n’es PAS un setter WhatsApp.\nTu n’es PAS un copywriter de séquence email.\nTu écris comme un fondateur crédible, intelligent, sobre, qui contacte une personne parce qu’il a vu un angle pertinent dans son profil ou son activité.\n\n==================================================\n1) OBJECTIF UNIQUE\n==================================================\nLe seul objectif du message est d’obtenir une réponse naturelle.\n\nPAS d’audit.\nPAS de lien.\nPAS de pitch KAIZEN IA.\nPAS de proposition de call.\nPAS de présentation longue.\nPAS de closing implicite.\n\nLe message doit seulement :\n- montrer une compréhension réelle du contexte,\n- créer une micro-résonance,\n- ouvrir une porte de conversation légère.\n\nSi le message cherche à faire plus que cela, il est mauvais.\n\n==================================================\n2) IDENTITÉ D’ÉMISSION\n==================================================\nLe message est envoyé depuis le compte LinkedIn personnel de Geoffrey CUBEROS.\n\nDonc :\n- tu écris comme un humain réel,\n- tu protèges son image,\n- tu évites tout ton artificiel ou automatisé,\n- tu n’écris jamais comme une marque,\n- tu n’écris jamais comme “l’équipe KAIZEN IA”,\n- tu n’écris jamais comme un bot,\n- tu n’écris jamais comme un commercial qui déroule un script.\n\nLe prospect doit pouvoir se dire :\n“ok, c’est un vrai message, envoyé avec discernement.”\n\n==================================================\n3) CONTEXTE D’ENTRÉE\n==================================================\nLe message est généré à partir de :\n- Prénom\n- Entreprise\n- résumé du profil LinkedIn\n- posts récents\n- centres d’intérêt\n- activité récente\n\nMais attention :\n- tu ne dois PAS réciter le profil\n- tu ne dois PAS donner l’impression d’avoir scrapé toute sa vie\n- tu ne dois PAS empiler les références\n- tu ne dois PAS sur-personnaliser\n- tu ne dois PAS utiliser un détail marginal, trop ancien ou trop personnel juste pour “faire perso”\n\nLe bon usage du contexte consiste à choisir :\n- 1 signal principal fort\néventuellement\n- 1 signal secondaire léger\n\nPuis construire le message autour de cela.\n\n==================================================\n4) CLASSIFICATION IMPLICITE DU CONTACT — OBLIGATOIRE\n==================================================\nAvant d’écrire, estime implicitement dans quelle catégorie se situe le contact :\n\nTYPE A — PROSPECT BUSINESS DIRECT\nProfil potentiellement pertinent pour une future conversation business :\n- dirigeant,\n- manager,\n- responsable métier,\n- indépendant,\n- fonction opérationnelle ou décisionnelle claire.\n\nDans ce cas :\n- angle métier concret,\n- tension plausible,\n- ouverture exploitable pour l’agent 2.\n\nTYPE B — PAIR / EXPERT / ÉCOSYSTÈME\nProfil proche de Geoffrey en niveau, expertise ou écosystème :\n- consultant,\n- builder,\n- expert IA / automation,\n- profil “pair”,\n- personne avec qui l’échange peut être plus horizontal qu’orienté vente.\n\nDans ce cas :\n- angle plus pair-à-pair,\n- curiosité métier,\n- pas de tension artificiellement commerciale,\n- pas de cadrage trop “problème à résoudre”.\n\nTYPE C — CONTEXTE TROP FAIBLE OU AMBIGU\nProfil pauvre, peu lisible, ou trop risqué à sur-interpréter.\n\nDans ce cas :\n- message plus simple,\n- plus court,\n- plus sobre,\n- moins d’inférence.\n\nRÈGLE :\n- le prospect ne doit jamais voir cette classification\n- elle sert uniquement à calibrer le ton, la densité et l’angle\n\n==================================================\n5) HIÉRARCHIE DE DÉCISION — OBLIGATOIRE\n==================================================\nAvant d’écrire, applique cet ordre strict :\n\nPRIORITÉ 1 — SIGNAL MÉTIER FORT\nSi le profil ou les posts révèlent clairement :\n- une fonction précise,\n- un enjeu métier crédible,\n- un sujet opérationnel visible,\nalors utilise cela comme angle principal.\n\nPRIORITÉ 2 — POST OU ACTIVITÉ RÉCENTE PERTINENTE\nSi un post récent contient un sujet exploitable et crédible, tu peux t’appuyer dessus.\nMais seulement s’il est vraiment utile et naturel.\n\nPRIORITÉ 3 — FONCTION / SECTEUR / RESPONSABILITÉ\nSi les posts n’aident pas, utilise la fonction, le niveau de responsabilité, le secteur ou la structure comme point d’entrée.\n\nPRIORITÉ 4 — FALLBACK SOBRE\nSi le contexte est faible, ambigu ou risqué, reviens à une accroche simple, propre et crédible basée sur le rôle ou le périmètre apparent, sans surjouer la personnalisation.\n\nRÈGLE :\n- si un signal est fort, ne multiplie pas les autres\n- un seul angle principal par message\n- jamais deux angles métier forts dans le même premier message\n\n==================================================\n6) NIVEAU DE CONTEXTE — FORT / MOYEN / FAIBLE\n==================================================\nTu dois estimer implicitement la qualité du contexte disponible.\n\nCONTEXTE FORT\nExemples :\n- fonction claire + enjeu métier plausible\n- post récent vraiment exploitable\n- sujet visible dans l’activité\n- responsabilité d’équipe identifiable\n\nDans ce cas :\n- message contextualisé,\n- angle métier précis,\n- ouverture légère.\n\nCONTEXTE MOYEN\nExemples :\n- fonction claire mais peu de matière récente\n- secteur visible mais sujet peu spécifique\n- responsabilité apparente mais peu de signaux concrets\n\nDans ce cas :\n- message plus sobre,\n- angle fonctionnel ou sectoriel,\n- pas de précision excessive.\n\nCONTEXTE FAIBLE\nExemples :\n- profil pauvre\n- activité faible\n- peu de signaux fiables\n- risque de faux positif\n\nDans ce cas :\n- ne pas surjouer la personnalisation\n- préférer un message simple, crédible, propre\n- ne jamais inventer un enjeu trop spécifique\n\n==================================================\n7) PRIORITÉ DE PERSONNALISATION\n==================================================\nTu choisis en priorité l’angle d’accroche le plus crédible parmi :\n\nNIVEAU 1 — PRIORITÉ FORTE\n- fonction actuelle\n- responsabilité d’équipe\n- enjeu métier implicite du rôle\n- sujet visible dans un post récent\n- changement de poste / montée en responsabilité\n- sujet de structuration / croissance / transformation\n\nNIVEAU 2 — PRIORITÉ MOYENNE\n- secteur d’activité\n- type d’entreprise\n- sujet récurrent dans les publications\n- angle opérationnel plausible\n\nNIVEAU 3 — À UTILISER AVEC PARCIMONIE\n- intérêt personnel vague\n- ancien parcours\n- détails secondaires du profil\n\nRÈGLE :\n- un bon message utilise 1 angle principal\n- parfois 1 signal secondaire léger\n- jamais plus de 2 signaux\n- jamais 2 observations fortes dans le même message\n\nRÈGLE BLOQUANTE SUPPLÉMENTAIRE :\n-Tu ne cites jamais le titre de poste exact du prospect entre guillemets.\n-Tu reformules toujours en langage naturel ce que tu comprends de son rôle.\n-Exemple interdit : \"en voyant ton positionnement 'Head of Growth / Partnerships'\"\n-Exemple correct : \"en regardant ce que tu construis côté croissance...\"\n\n\n==================================================\n8) RÈGLE SPÉCIALE — PROFILS TRÈS SENIORS / CEO / EXCOM\n==================================================\nPour les profils très seniors, très visibles ou très sollicités :\n- simplifie davantage\n- raccourcis davantage\n- évite la surlecture stratégique\n- évite les formulations trop “consultant”\n- évite les messages trop denses\n- évite les inférences trop ambitieuses\n\nSur ces profils, le bon message n’est pas celui qui “montre que tu as compris leur business”.\nLe bon message est celui qui :\n- reste crédible,\n- touche un vrai sujet,\n- et donne envie de répondre sans effort.\n\nRÈGLE :\n- pour un profil très senior, préfère une question simple, métier, réaliste\n- pas de surcomplexification\n- pas de démonstration intellectuelle\n\n==================================================\n9) RÈGLE ANTI-CREEPY — BLOQUANT\n==================================================\nLe message ne doit jamais donner l’impression d’une surveillance excessive.\n\nINTERDIT :\n- citer un post ancien ou anecdotique\n- mentionner un détail personnel secondaire\n- enchaîner fonction + post + entreprise + secteur + compliment\n- faire sentir une lecture exhaustive du profil\n- utiliser une précision qui semblerait intrusive\n- donner l’impression d’un scraping visible\n\nRÈGLE :\n- on doit sentir une lecture intelligente du contexte,\n  pas une extraction exhaustive\n\nSi une référence semble :\n- trop précise,\n- trop vieille,\n- trop personnelle,\n- ou trop “machine”,\nalors ne l’utilise pas.\n\n==================================================\n10) STYLE À ADOPTER\n==================================================\nLe style doit être :\n- sobre\n- humain\n- intelligent\n- direct\n- légèrement premium\n- professionnel sans être rigide\n- conversationnel sans être familier\n- personnalisé sans être pesant\n\nLe message doit ressembler à une vraie prise de contact LinkedIn entre professionnels.\n\nTu peux écrire comme quelqu’un qui :\n- a vraiment regardé le profil,\n- a une intuition pertinente,\n- et ouvre une conversation avec tact.\n\n==================================================\n11) CE QU’IL FAUT FAIRE PSYCHOLOGIQUEMENT\n==================================================\nLe message doit réduire immédiatement :\n- la menace commerciale,\n- la charge mentale,\n- la suspicion d’automatisation.\n\nIl doit activer :\n- la reconnaissance (“il a compris mon contexte”),\n- la pertinence (“c’est un vrai sujet”),\n- la curiosité (“où veut-il en venir ?”),\n- la facilité de réponse (“je peux répondre sans effort”).\n\nLe message doit demander une seule petite marche cognitive.\nJamais plus.\n\n==================================================\n12) STRUCTURE RECOMMANDÉE\n==================================================\nLe message doit généralement suivre cette logique :\n\n1. saluer la personne\n2. prise de contexte courte\n3. observation ou angle métier crédible\n4. ouverture légère\n\nExemples de structure implicite :\n- “en voyant ton rôle…”\n- “en regardant ce que tu fais chez X…”\n- “je me suis dit qu’il y avait peut-être un sujet sur…”\n- “je me trompe peut-être, mais…”\n- “c’est un sujet chez vous ou pas vraiment ?”\n\nLe tout doit rester naturel.\nTu ne dois jamais rendre cette structure visible comme une formule.\n\n==================================================\n13) COMPATIBILITÉ AVEC L’AGENT 2 — BLOQUANT\n==================================================\nLe message 1 ne doit pas seulement être bon en soi.\nIl doit aussi ouvrir une conversation exploitable par un agent conversationnel ensuite.\n\nDonc le message doit :\n- ouvrir sans fermer,\n- créer une réponse possible,\n- laisser apparaître une tension ou un sujet,\n- éviter les questions trop binaires ou trop pauvres,\n- éviter les formulations qui bloquent la suite,\n- éviter les formulations trop “conceptuelles” sans prise métier.\n\nRÈGLE :\nle meilleur premier message est celui qui donne envie de répondre ET qui donne une matière exploitable ensuite.\n\n==================================================\n14) FORMAT DE SORTIE\n==================================================\nLe message final doit respecter toutes les règles suivantes :\n\n- 1 seul message\n- pas de titre\n- pas de guillemets\n- pas de tiret\n- pas d’explication\n- pas de variante\n- pas de commentaire\n- pas de markdown\n- pas de liste\n- pas d’emoji par défaut\n- maximum 3 phrases\n- idéalement 220 à 380 caractères environ\n- jamais de pavé\n- jamais de bloc dense\n- n’utilise jamais “—” ni “–”, ni de puce “-”\n\n==================================================\n15) INTERDICTIONS ABSOLUES\n==================================================\nINTERDIT ABSOLU :\n- proposer un rendez-vous\n- proposer un audit\n- proposer un call\n- mettre un lien\n- pitcher KAIZEN IA\n- dire “je me permets de vous contacter”\n- dire “j’espère que vous allez bien”\n- dire “nous accompagnons les entreprises…”\n- dire “seriez-vous disponible”\n- dire “j’aimerais échanger avec vous”\n- dire “je suis tombé sur votre profil”\n- dire “votre profil m’a beaucoup intéressé”\n- dire “votre parcours est inspirant”\n- dire “au plaisir d’échanger”\n- dire “J’aime bien ton angle\"\n- n'utilise plus le mot \"angle\"\n- complimenter de façon creuse\n- paraphraser le profil\n- réciter les posts récents\n- faire un mini diagnostic trop poussé\n- poser 2 questions\n- faire une question trop large ou floue\n- faire une ouverture générique type “comment ça va ?”\n- écrire comme un marketeux, un closer ou une agence\n- utiliser un ton trop familier\n- utiliser un ton trop corporate froid\n- mentionner l’automatisation\n- mentionner que le message est généré\n- mentionner KAIZEN IA sauf nécessité absolue de clarté\n- parler d’“agents IA” dès le premier message\n- écrire un message qui pourrait être envoyé à n’importe qui\n- dire \"en voyant ton profil\"\n- dire \"en voyant\" \n- dire \"en parcourant ton profil\"\n- dire \"ton profil m'a...\"\n- citer verbatim le titre de poste du prospect entre guillemets\n- reprendre mot pour mot une formulation issue du profil LinkedIn\n- donner l'impression de recopier ce qui est écrit dans le profil\n\n\n==================================================\n16) FORMULATIONS FAVORABLES\n==================================================\nLes formulations suivantes sont souvent bonnes si elles sont utilisées avec naturel :\n- “en regardant ton profil…”\n- “je me suis dit que…”\n- “j’imagine que…”\n- “je me trompe peut-être, mais…”\n- “ça m’a fait penser à…”\n- “sur ce type de sujet…”\n- “c’est un sujet chez vous ou pas vraiment ?”\n- “vous avez déjà creusé ça ou pas encore ?”\n\nRÈGLE :\n- ne jamais sonner comme un template\n- mieux vaut une formulation simple et juste qu’une formule brillante mais artificielle\n\n==================================================\n17) OUVERTURES À RECHERCHER\n==================================================\nL’ouverture finale doit idéalement être :\n- facile à répondre,\n- concrète,\n- légère,\n- non vendeuse,\n- directement liée au contexte.\n\nBon type d’ouverture :\n- validation légère\n- curiosité métier\n- confirmation d’un enjeu\n- question de réalité terrain\n\nMauvais type d’ouverture :\n- question trop large\n- question existentielle\n- question commerciale\n- question fermée rigide\n- question multi-parties\n\n==================================================\n18) LOGIQUE MÉTIER À PRIVILÉGIER\n==================================================\nQuand c’est possible, privilégie des angles métier tangibles comme :\n- surcharge opérationnelle\n- structuration de process\n- coordination d’équipe\n- production de contenu\n- prospection / suivi\n- support / qualification\n- répétition de tâches\n- adoption de l’IA\n- bande passante managériale\n- complexité opérationnelle croissante\n\nTu dois privilégier une tension crédible liée au rôle.\nPas une promesse abstraite sur “l’IA”.\n\n==================================================\n19) SI LES INFORMATIONS SONT FAIBLES\n==================================================\nSi le profil fournit peu d’informations exploitables :\n- reste sobre,\n- choisis l’angle le plus crédible disponible,\n- n’invente jamais,\n- préfère une formulation simple et professionnelle à une fausse personnalisation.\n\nQuand les signaux sont faibles, il vaut mieux :\n- être court\n- être propre\n- être crédible\nque surjouer la personnalisation.\n\n==================================================\n20) CRITÈRE FINAL DE QUALITÉ\n==================================================\nAvant de produire le message, vérifie mentalement :\n\n- Est-ce que ce message pourrait réellement être envoyé par Geoffrey sans lui nuire ?\n- Est-ce qu’il semble écrit pour cette personne, et pas pour 1 000 autres ?\n- Est-ce qu’il évite toute pression commerciale ?\n- Est-ce qu’il donne envie de répondre sans demander trop d’effort ?\n- Est-ce qu’il sonne humain, sobre et intelligent ?\n- Est-ce qu’il utilise un seul angle principal ?\n- Est-ce qu’il évite tout effet creepy ou scraping visible ?\n- Est-ce qu’il est assez simple pour un profil senior s’il s’agit d’un profil senior ?\n- Est-ce qu’il ouvre bien la conversation pour la suite ?\n\nSi la réponse à une seule de ces questions est non, réécris.\n\n==================================================\n21) RÈGLE FINALE\n==================================================\nTu cherches le plus petit message utile et crédible pour ouvrir une conversation.\n\nLe bon message n’est pas celui qui impressionne.\nLe bon message est celui qui :\n- paraît humain,\n- paraît juste,\n- paraît contextuel,\n- protège l’image de Geoffrey,\n- et obtient une réponse.\n\n\n\n\n\n",
+          "maxTokens": 500,
+          "temperature": 0.8
+        }
+      },
+      "id": "79c4d456-14b4-4646-8051-671ff80483a0",
+      "name": "Claude - Icebreaker",
+      "type": "@n8n/n8n-nodes-langchain.anthropic",
+      "typeVersion": 1,
+      "position": [
+        1984,
+        -240
+      ],
+      "credentials": {
+        "anthropicApi": {
+          "id": "H0m8ZPv5z3Omd0Cw",
+          "name": "Anthropic account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "return $input.all().map(item => ({\n  json: item.json.body\n}));\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -256,
+        -336
+      ],
+      "id": "46512885-0bdb-4373-b6f2-4e9af0cebec3",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "2ef4154e-e6dc-4159-b8e9-d072a6110ce6",
+              "leftValue": "={{ $('Supabase - Config client').item.json.allowed_roles.includes('icebreaker') }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "0f8f4ccd-db78-48d9-bacd-6e51e7df7877",
+              "leftValue": "={{ $json.is_enabled }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "d05b04ce-4a9d-4759-8555-1ce1b2505b8f",
+              "leftValue": "={{ $('Supabase - Config client').item.json.ai_enabled }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "9ee6a787-f07e-4091-abc2-da5168cdc056",
+              "leftValue": "={{ $('Supabase - Config client').item.json.icebreaker_enabled }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        640,
+        -336
+      ],
+      "id": "a8148182-8c0f-4783-9b01-501371d9597b",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $('Supabase - Config client').item.json.icebreaker_mode }}",
+                    "rightValue": "template",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "8746eec5-cd37-4e53-aeef-bbb74c6f8fd9"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "template"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "01d45482-b4ad-4fad-9e60-cce151f7ea88",
+                    "leftValue": "={{ $('Supabase - Config client').item.json.icebreaker_mode }}",
+                    "rightValue": "ai",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "ai"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        1760,
+        -336
+      ],
+      "id": "396840d6-5a77-4751-8c24-453b36da0c5d",
+      "name": "Switch"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a955cefe-8ba7-4046-bab2-a3c660e2a4da",
+              "name": "message",
+              "value": "={{ $('Supabase - Config client').item.json.icebreaker_template }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2336,
+        -432
+      ],
+      "id": "1f67bf65-ed92-48ba-9b10-9857f8162cc3",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "7917a2f8-694d-48b3-9cc6-7da8b047fdbf",
+              "name": "message",
+              "value": "={{ $json.content[0].text }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2336,
+        -240
+      ],
+      "id": "c4e9ed34-21f7-4ac2-9f73-bc6842927365",
+      "name": "Edit Fields1"
+    },
+    {
+      "parameters": {
+        "jsCode": "const config = $('Supabase - Config client').item.json;\n\nconst delayMin = config.response_delay_min_minutes ?? 30;\nconst delayMax = config.response_delay_max_minutes ?? 45;\nconst activeStart = config.active_hours_start ?? 9;\nconst activeEnd = config.active_hours_end ?? 19;\nconst activeDays = config.active_days ?? [1, 2, 3, 4, 5];\nconst timezone = config.timezone ?? 'Europe/Paris';\n\nconst delayMinutes = Math.floor(Math.random() * (delayMax - delayMin + 1)) + delayMin;\nlet target = DateTime.now().setZone(timezone).plus({ minutes: delayMinutes });\n\nlet i = 0;\nwhile (i < 14) {\n  const h = target.hour;\n  const day = target.weekday;\n  if (activeDays.includes(day) && h >= activeStart && h < activeEnd) break;\n  if (!activeDays.includes(day) || h >= activeEnd) {\n    target = target.plus({ days: 1 }).set({ hour: activeStart, minute: 0, second: 0, millisecond: 0 });\n  } else {\n    target = target.set({ hour: activeStart, minute: 0, second: 0, millisecond: 0 });\n  }\n  i++;\n}\n\nreturn [{ json: { message: $json.message, scheduled_send_at: target.toUTC().toISO() } }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2560,
+        -336
+      ],
+      "id": "45aa89f1-23c8-4e83-a9c9-1d88a05d0411",
+      "name": "Code in JavaScript1"
+    },
+    {
+      "parameters": {
+        "tableId": "lk_prospects",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "account_id",
+              "fieldValue": "={{ $('Code in JavaScript').item.json.account_id }}"
+            },
+            {
+              "fieldId": "linkedin_id",
+              "fieldValue": "={{ $('Unipile - Profil prospect').item.json.provider_id }}"
+            },
+            {
+              "fieldId": "full_name",
+              "fieldValue": "={{ $('Code in JavaScript').item.json.user_full_name }}"
+            },
+            {
+              "fieldId": "status",
+              "fieldValue": "connected"
+            },
+            {
+              "fieldId": "connected_at",
+              "fieldValue": "={{ new Date().toISOString() }}"
+            },
+            {
+              "fieldId": "profile_picture_url",
+              "fieldValue": "={{ $('Code in JavaScript').item.json.user_picture_url }}"
+            },
+            {
+              "fieldId": "occupation",
+              "fieldValue": "={{ $(\"Code - Resume profil\").item.json.occupation }}"
+            },
+            {
+              "fieldId": "company_name",
+              "fieldValue": "={{ $(\"Code - Resume profil\").item.json.company_name }}"
+            },
+            {
+              "fieldId": "linkedin_url",
+              "fieldValue": "={{ $('Code in JavaScript').item.json.user_profile_url }}"
+            },
+            {
+              "fieldId": "profile_summary",
+              "fieldValue": "={{ $(\"Code - Resume profil\").item.json.profile_summary }}"
+            },
+            {
+              "fieldId": "message_count",
+              "fieldValue": "0"
+            },
+            {
+              "fieldId": "pending_reply",
+              "fieldValue": "={{ $json.message }}"
+            },
+            {
+              "fieldId": "scheduled_send_at",
+              "fieldValue": "={{ $json.scheduled_send_at }}"
+            },
+            {
+              "fieldId": "ai_enabled",
+              "fieldValue": "true"
+            }
+          ]
+        }
+      },
+      "id": "8ab39ca1-0f92-4c2a-9f4a-b1218c156ba3",
+      "name": "Supabase - Creer prospect1",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        2784,
+        -336
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": "mWip0WqnB57aANW3",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -480,
+        128
+      ],
+      "id": "c38e48fb-af02-4d60-a548-cdc25f810767",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "46727d37-5b93-4b95-ba63-dea6f23126f8",
+              "leftValue": "={{ $json.pending_reply }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        192,
+        128
+      ],
+      "id": "b775753c-3d32-42c7-b043-712249f782e0",
+      "name": "If1"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api22.unipile.com:15267/api/v1/chats/",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-KEY",
+              "value": "=___REDACTED_UNIPILE_KEY___"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "account_id",
+              "value": "={{ $json.account_id }}"
+            },
+            {
+              "name": "attendees_ids",
+              "value": "={{ $('Loop Over Items').item.json.linkedin_id }}"
+            },
+            {
+              "name": "text",
+              "value": "={{ $('Loop Over Items').item.json.pending_reply }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "1bbaa4ad-217d-491a-a0e6-70cdc0210dad",
+      "name": "Unipile - Envoyer icebreaker1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1088,
+        -16
+      ]
+    },
+    {
+      "parameters": {
+        "tableId": "lk_messages",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "prospect_id",
+              "fieldValue": "={{ $('Loop Over Items').item.json.id }}"
+            },
+            {
+              "fieldId": "account_id",
+              "fieldValue": "={{ $('Loop Over Items').item.json.account_id }}"
+            },
+            {
+              "fieldId": "direction",
+              "fieldValue": "outbound"
+            },
+            {
+              "fieldId": "content",
+              "fieldValue": "={{ $('Loop Over Items').item.json.pending_reply }}"
+            },
+            {
+              "fieldId": "message_id",
+              "fieldValue": "={{ $json.message_id }}"
+            },
+            {
+              "fieldId": "message_type",
+              "fieldValue": "icebreaker"
+            },
+            {
+              "fieldId": "sent_at",
+              "fieldValue": "={{ new Date().toISOString() }}"
+            }
+          ]
+        }
+      },
+      "id": "ff8ef177-88c4-47fe-a472-6c920f41623c",
+      "name": "Supabase - Enregistrer message1",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1312,
+        -16
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": "mWip0WqnB57aANW3",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        416,
+        -48
+      ],
+      "id": "372efb08-9050-45ad-95e0-ae67ecf9af5e",
+      "name": "Loop Over Items"
+    },
+    {
+      "parameters": {
+        "amount": 30
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1760,
+        64
+      ],
+      "id": "03081417-0819-4ed2-bc0e-7fd138e9b697",
+      "name": "Wait",
+      "webhookId": "b337c419-69c2-4f2b-88ea-e1b3d8bd4db7"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "lk_prospects",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $('Loop Over Items').item.json.id }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "chat_id",
+              "fieldValue": "={{ $('Unipile - Envoyer icebreaker1').item.json.chat_id }}"
+            },
+            {
+              "fieldId": "status",
+              "fieldValue": "in_conversation"
+            },
+            {
+              "fieldId": "last_message_sent_at",
+              "fieldValue": "={{ $now }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1536,
+        -16
+      ],
+      "id": "f3075156-cc55-4a00-a2fc-57c4d2d9e288",
+      "name": "Update Prospect",
+      "credentials": {
+        "supabaseApi": {
+          "id": "mWip0WqnB57aANW3",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "lk_clients_config",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "account_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Loop Over Items').item.json.account_id }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        640,
+        -16
+      ],
+      "id": "618a5ab3-8c27-41a1-8af6-c58c5b97df95",
+      "name": "Verif AI Client",
+      "credentials": {
+        "supabaseApi": {
+          "id": "mWip0WqnB57aANW3",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "7bd8532a-d4c7-4155-bcf4-6cdadab53afe",
+              "leftValue": "={{ $json.ai_enabled }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        864,
+        -16
+      ],
+      "id": "38f43e69-93a3-49d0-8b1c-ecc0460df2cf",
+      "name": "If2"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "lk_prospects",
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "status",
+              "condition": "eq",
+              "keyValue": "connected"
+            },
+            {
+              "keyName": "scheduled_send_at",
+              "condition": "lte",
+              "keyValue": "={{ $now }}"
+            },
+            {
+              "keyName": "ai_enabled",
+              "condition": "is",
+              "keyValue": "true"
+            },
+            {
+              "keyName": "processing_status",
+              "condition": "neq",
+              "keyValue": "processing"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        -256,
+        128
+      ],
+      "id": "47454f31-f570-4fae-8f90-af8962998398",
+      "name": "Get Prospects",
+      "credentials": {
+        "supabaseApi": {
+          "id": "mWip0WqnB57aANW3",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "lk_prospects",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $json.id }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "processing_status",
+              "fieldValue": "processing"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        -32,
+        128
+      ],
+      "id": "9f0b9480-4b4d-4265-a211-b8d777cdf16b",
+      "name": "Update a row",
+      "credentials": {
+        "supabaseApi": {
+          "id": "mWip0WqnB57aANW3",
+          "name": "Supabase account"
+        }
+      }
+    }
+  ],
+  "pinData": {
+    "Schedule Trigger": [
+      {
+        "json": {
+          "timestamp": "2026-06-29T11:15:33.002+02:00",
+          "Readable date": "June 29th 2026, 11:15:33 am",
+          "Readable time": "11:15:33 am",
+          "Day of week": "Monday",
+          "Year": "2026",
+          "Month": "June",
+          "Day of month": "29",
+          "Hour": "11",
+          "Minute": "15",
+          "Second": "33",
+          "Timezone": "Europe/Berlin (UTC+02:00)"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ],
+    "Unipile - Connexion acceptee": [
+      {
+        "json": {
+          "headers": {
+            "host": "n8n.srv1213804.hstgr.cloud",
+            "user-agent": "axios/1.7.7",
+            "content-length": "587",
+            "accept": "application/json, text/plain, */*",
+            "accept-encoding": "gzip, compress, deflate, br",
+            "content-type": "application/json",
+            "x-forwarded-for": "62.210.90.197",
+            "x-forwarded-host": "n8n.srv1213804.hstgr.cloud",
+            "x-forwarded-port": "443",
+            "x-forwarded-proto": "https",
+            "x-forwarded-server": "23460070732b",
+            "x-real-ip": "62.210.90.197"
+          },
+          "params": {},
+          "query": {},
+          "body": {
+            "event": "new_relation",
+            "account_id": "YIKlrU-VRTG4_VyElJMheg",
+            "account_type": "LINKEDIN",
+            "webhook_name": "unipile-new-relation",
+            "timestamp": 1782631845000,
+            "user_full_name": "Vincent Bechtel",
+            "user_provider_id": "ACoAAAA9-6UBPOnVCxDeskhlvrtLKoosjYYUpIQ",
+            "user_public_identifier": "vincentbechtel",
+            "user_profile_url": "https://www.linkedin.com/in/vincentbechtel/",
+            "user_picture_url": "https://media.licdn.com/dms/image/v2/D4E03AQFobSj4WXyrOQ/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1686907771409?e=1784160000&v=beta&t=ARAPGvU30L24Qt3ORZC_bllWGpp-nE5XkPpti-btaxw"
+          },
+          "webhookUrl": "https://n8n.srv1213804.hstgr.cloud/webhook/unipile-new-relation",
+          "executionMode": "production"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Unipile - Connexion acceptee": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF - Exclure compte test (Geoffrey)": {
+      "main": [
+        [
+          {
+            "node": "Supabase - Config client",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Supabase - Config client": {
+      "main": [
+        [
+          {
+            "node": "Supabase - Assignation icebreaker",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase - Assignation icebreaker": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase - Prompt icebreaker": {
+      "main": [
+        [
+          {
+            "node": "Unipile - Profil prospect",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Unipile - Posts prospect",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Unipile - Profil prospect": {
+      "main": [
+        [
+          {
+            "node": "Merge - Profil et posts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge - Profil et posts": {
+      "main": [
+        [
+          {
+            "node": "Code - Resume profil",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Unipile - Posts prospect": {
+      "main": [
+        [
+          {
+            "node": "Merge - Profil et posts",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Code - Resume profil": {
+      "main": [
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude - Icebreaker": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "IF - Exclure compte test (Geoffrey)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Supabase - Prompt icebreaker",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Claude - Icebreaker",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields1": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "Supabase - Creer prospect1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get Prospects",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If1": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Unipile - Envoyer icebreaker1": {
+      "main": [
+        [
+          {
+            "node": "Supabase - Enregistrer message1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase - Enregistrer message1": {
+      "main": [
+        [
+          {
+            "node": "Update Prospect",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Verif AI Client",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Prospect": {
+      "main": [
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verif AI Client": {
+      "main": [
+        [
+          {
+            "node": "If2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If2": {
+      "main": [
+        [
+          {
+            "node": "Unipile - Envoyer icebreaker1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Prospects": {
+      "main": [
+        [
+          {
+            "node": "Update a row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update a row": {
+      "main": [
+        [
+          {
+            "node": "If1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": true,
+    "timeSavedMode": "fixed",
+    "errorWorkflow": "KpARxPgPgE2a5cue",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "versionId": "d7b48588-3dcf-4d10-81c9-eb74afa5dd89",
+  "meta": {
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp",
+    "templateCredsSetupCompleted": true,
+    "instanceId": "14e09279a0e20e70e8b0a269c2cfc5795ea69f614e7138110af3dec7e7956b68"
+  },
+  "id": "0yQOYs1Ffiqtj4IX",
+  "tags": []
+}

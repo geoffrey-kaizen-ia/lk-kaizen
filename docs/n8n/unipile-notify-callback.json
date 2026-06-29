@@ -1,0 +1,434 @@
+{
+  "name": "Unipile Notify Callback",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "unipile-notify",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "264af82b-08cf-403d-84bd-b9b3c5e16e5c",
+      "name": "Unipile Notify",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        -640
+      ],
+      "webhookId": "834fb0bd-f440-43e1-a882-4570660782c4"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst item = $input.first().json;\nconst userId = item.body.name;\nconst accountId = item.body.account_id;\n\nreturn [{\n  json: {\n    supabase_url: 'https://omwmbqpbwprpaqaphphg.supabase.co/rest/v1/lk_clients_config?user_id=eq.' + userId,\n    account_id: accountId\n  }\n}];\n"
+      },
+      "id": "68615981-8965-4250-8bd2-680f56f822dd",
+      "name": "Prepare Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        -640
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ $json.supabase_url }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "___REDACTED_JWT___"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer ___REDACTED_JWT___"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "account_id",
+              "value": "={{ $json.account_id }}"
+            },
+            {
+              "name": "is_active",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "6c733f7a-0371-4779-bbce-e4f08cd0312c",
+      "name": "Update Supabase",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        448,
+        -640
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": {
+          "ok": true
+        },
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "379e7487-6049-4f53-a510-f45a13b374e1",
+      "name": "Respond OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        2240,
+        -640
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "lk_clients_config"
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        896,
+        -640
+      ],
+      "id": "9b69ef58-25c7-473d-b310-869604dfae05",
+      "name": "Get many rows",
+      "credentials": {
+        "supabaseApi": {
+          "id": "mWip0WqnB57aANW3",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "amount": 15
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        672,
+        -640
+      ],
+      "id": "a2e632b7-6888-40e6-9318-9b86080e8da2",
+      "name": "Wait",
+      "webhookId": "f8a31a1b-1118-4851-b65a-7616bd002b4a"
+    },
+    {
+      "parameters": {
+        "jsCode": "const EXCLU = \"\"; // mets ici l'account_id à exclure, ou laisse vide\n\nconst ids = items\n  .map(item => item.json.account_id)\n  .filter(id => id && id !== EXCLU);\n\nreturn [{\n  json: {\n    request_url: \"https://n8n.srv1213804.hstgr.cloud/webhook/LinkedIn_message_entrant\",\n    source: \"messaging\",\n    name: \"LinkedIn_message_entrant\",\n    events: [\"message_received\"],\n    account_ids: ids,\n    headers: [{ key: \"Content-Type\", value: \"application/json\" }]\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        -640
+      ],
+      "id": "2f66ec8c-7bfd-4d6d-85a6-80e28bd7a897",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "url": "https://api22.unipile.com:15267/api/v1/webhooks",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1568,
+        -640
+      ],
+      "id": "83a0d61b-b741-48da-b815-02947ef82fe9",
+      "name": "List WebHook",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "mNQkc2EST14d7fGl",
+          "name": "Unipile API - LinkedIn"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const list = $('List WebHook').first().json.items || [];\n\n// tous les webhooks qui s'appellent LinkedIn_message_entrant\nconst mine = list.filter(w => w.name === \"LinkedIn_message_entrant\");\n\n// on garde celui qui a le plus de comptes (= le nouveau, liste complète)\nlet keep = null;\nfor (const w of mine) {\n  if (!keep || (w.account_ids || []).length > (keep.account_ids || []).length) {\n    keep = w;\n  }\n}\n\n// on renvoie les id de tous les AUTRES (à supprimer)\nreturn mine\n  .filter(w => keep && w.id !== keep.id)\n  .map(w => ({ json: { id: w.id } }));\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1792,
+        -640
+      ],
+      "id": "8f98c9b9-e680-4356-b5cd-317c88fba5da",
+      "name": "Find Old webhook"
+    },
+    {
+      "parameters": {
+        "method": "DELETE",
+        "url": "=https://api22.unipile.com:15267/api/v1/webhooks/{{ $json.id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        2016,
+        -640
+      ],
+      "id": "f4a11578-24c8-4c8d-964b-1a341880e6d7",
+      "name": "Delete Webhook",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "mNQkc2EST14d7fGl",
+          "name": "Unipile API - LinkedIn"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api22.unipile.com:15267/api/v1/webhooks",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1344,
+        -640
+      ],
+      "id": "edb6f514-86a9-4bba-8d9d-a1f266488c8f",
+      "name": "Create WebHook",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "mNQkc2EST14d7fGl",
+          "name": "Unipile API - LinkedIn"
+        }
+      }
+    }
+  ],
+  "pinData": {
+    "Unipile Notify": [
+      {
+        "json": {
+          "headers": {
+            "host": "n8n.srv1213804.hstgr.cloud",
+            "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 12_4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/102.0.0.0 Safari/537.36",
+            "content-length": "139",
+            "accept": "application/json, text/plain, */*",
+            "accept-encoding": "gzip, deflate, br, zstd",
+            "accept-language": "en-US",
+            "content-type": "application/json",
+            "priority": "u=1, i",
+            "sec-ch-ua": "\"Not.A/Brand\";v=\"99\", \"Chromium\";v=\"136\"",
+            "sec-ch-ua-mobile": "?0",
+            "sec-ch-ua-platform": "\"Linux\"",
+            "sec-fetch-dest": "empty",
+            "sec-fetch-mode": "cors",
+            "sec-fetch-site": "cross-site",
+            "x-forwarded-for": "62.210.90.197",
+            "x-forwarded-host": "n8n.srv1213804.hstgr.cloud",
+            "x-forwarded-port": "443",
+            "x-forwarded-proto": "https",
+            "x-forwarded-server": "23460070732b",
+            "x-real-ip": "62.210.90.197"
+          },
+          "params": {},
+          "query": {},
+          "body": {
+            "status": "CREATION_SUCCESS",
+            "account_id": "pVtZao7CRnq4PKXHGymAAw",
+            "name": "5a0eb34e-844c-456d-b955-c1ac971eeb5a",
+            "account_type": "LINKEDIN"
+          },
+          "webhookUrl": "https://n8n.srv1213804.hstgr.cloud/webhook/unipile-notify",
+          "executionMode": "production"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Unipile Notify": {
+      "main": [
+        [
+          {
+            "node": "Prepare Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Data": {
+      "main": [
+        [
+          {
+            "node": "Update Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Supabase": {
+      "main": [
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get many rows": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "Get many rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Create WebHook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "List WebHook": {
+      "main": [
+        [
+          {
+            "node": "Find Old webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Old webhook": {
+      "main": [
+        [
+          {
+            "node": "Delete Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Delete Webhook": {
+      "main": [
+        [
+          {
+            "node": "Respond OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create WebHook": {
+      "main": [
+        [
+          {
+            "node": "List WebHook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": true,
+    "timeSavedMode": "fixed",
+    "errorWorkflow": "KpARxPgPgE2a5cue",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "versionId": "cd9c56a8-c76b-40f8-a34b-f2bbb9023d27",
+  "meta": {
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp",
+    "templateCredsSetupCompleted": true,
+    "instanceId": "14e09279a0e20e70e8b0a269c2cfc5795ea69f614e7138110af3dec7e7956b68"
+  },
+  "id": "i8kR9LQwN8S1GPoH",
+  "tags": []
+}

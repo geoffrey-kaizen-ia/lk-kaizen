@@ -1,0 +1,2910 @@
+{
+  "name": "Kaizen- IceBreaker #2",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 */30 8-19 * * 1-6"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -352,
+        32
+      ],
+      "id": "0ac01ed2-a3ec-4fbd-8b3a-59e4d7089977",
+      "name": "Toutes les 30 min",
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "url": "https://api22.unipile.com:15267/api/v1/users/invite/received",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "account_id",
+              "value": "BY85po44SUyPqFR8pbrm0Q"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-KEY",
+              "value": "___REDACTED_UNIPILE_KEY___"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -128,
+        32
+      ],
+      "id": "93cb586c-df82-4cd8-b941-479de7fdca2a",
+      "name": "GET Invitations Reçues",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api22.unipile.com:15267/api/v1/users/invite/received/{{ $json.id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-KEY",
+              "value": "___REDACTED_UNIPILE_KEY___"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "action",
+              "value": "accept"
+            },
+            {
+              "name": "account_id",
+              "value": "BY85po44SUyPqFR8pbrm0Q"
+            },
+            {
+              "name": "provider",
+              "value": "={{ $json.specifics.provider }}"
+            },
+            {
+              "name": "shared_secret",
+              "value": "={{ $json.specifics.shared_secret }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        320,
+        32
+      ],
+      "id": "bb0192ce-035c-4cf6-9d34-234600dc669c",
+      "name": "ACCEPTER Invitation",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "items",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        96,
+        32
+      ],
+      "id": "d5607672-16e1-4e1b-a7ce-14091e110c9e",
+      "name": "Split Out"
+    },
+    {
+      "parameters": {
+        "url": "=https://api22.unipile.com:15267/api/v1/users/{{ $json.provider_id }}/posts",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "account_id",
+              "value": "=BY85po44SUyPqFR8pbrm0Q"
+            },
+            {
+              "name": "limit",
+              "value": "3"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        992,
+        32
+      ],
+      "id": "3ad683d6-15ce-4eed-963c-ffa00aad1ad2",
+      "name": "Unipile - Récupérer Posts1",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "mNQkc2EST14d7fGl",
+          "name": "Unipile API - LinkedIn"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// 1. On récupère les posts\nconst items = $input.all().map(item => item.json);\n\n// RÉGLAGE : On passe à 12 mois pour voir plus loin dans le passé\nconst limiteDate = new Date();\nlimiteDate.setMonth(limiteDate.getMonth() - 12); \n\nlet postsTexte = \"\";\nlet compteur = 1;\n\nfor (const item of items) {\n  if (item.object === \"PostList\" && item.items) {\n    for (const post of item.items) {\n      // Optionnel : si tu veux aussi les reposts, supprime la ligne suivante\n      if (post.is_repost === true) continue;\n\n      const datePost = new Date(post.parsed_datetime);\n      \n      // Si le post est plus récent que 12 mois, on le prend\n      if (datePost >= limiteDate) {\n        postsTexte += `POST ${compteur} :\\n${post.text}\\n\\n`;\n        compteur++;\n      }\n    }\n  }\n}\n\n// 2. RÉCUPÉRATION DU PROVIDER_ID DEPUIS LE NOEUD 'If'\nconst providerId = $('If').first().json.provider_id;\n\n// 3. Récupération des autres infos depuis 'RECUP RELATION1'\nconst prospectData = $('RECUP RELATION1').first().json;\n\nconst prenom = prospectData.first_name || \"Candidat\";\nconst nom = prospectData.last_name || \"\";\nconst poste = prospectData.headline || \"Poste non renseigné\";\nconst emailPro = prospectData.email || \"\";\n\n// 4. On renvoie le package complet\nreturn [{\n  json: {\n    prenom: prenom,\n    nom: nom,\n    poste: poste,\n    posts_texte: postsTexte.trim() || \"Pas de posts originaux sur les 12 derniers mois.\",\n    provider_id: providerId,\n    job_title: poste,\n    email_pro: emailPro\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1216,
+        32
+      ],
+      "id": "d9e425d7-a5dd-4d47-8a91-1623175bda6f",
+      "name": "Code in JavaScript1"
+    },
+    {
+      "parameters": {
+        "url": "=https://api22.unipile.com:15267/api/v1/users/{{ $('Split Out').item.json.inviter.inviter_id }}",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "account_id",
+              "value": "BY85po44SUyPqFR8pbrm0Q"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-KEY",
+              "value": "___REDACTED_UNIPILE_KEY___"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        544,
+        32
+      ],
+      "id": "bb0e2b4b-0aef-4fed-9c7a-1db5396a1c82",
+      "name": "RECUP RELATION1",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "value": "appAVhcTwN9jMQazz",
+          "mode": "list",
+          "cachedResultName": "LinkedIn",
+          "cachedResultUrl": "https://airtable.com/appAVhcTwN9jMQazz"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblcRiVaFV08V2vZG",
+          "mode": "list",
+          "cachedResultName": "Prospect Waalaxy",
+          "cachedResultUrl": "https://airtable.com/appAVhcTwN9jMQazz/tblcRiVaFV08V2vZG"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "IA_Active": true,
+            "firstName": "={{ $('Code in JavaScript1').item.json.prenom }}",
+            "lastName": "={{ $('Code in JavaScript1').item.json.nom }}",
+            "job_title": "={{ $('Code in JavaScript1').item.json.job_title }}",
+            "Status_Invit": "Invitation Reçue",
+            "Résumé du profil": "={{ $json.output[0].content[0].text }}",
+            "Nombre_Echange": 0,
+            "Scoring": 0,
+            "proEmail": "={{ $('Code in JavaScript1').item.json.email_pro }}",
+            "messageSent": "Yes",
+            "Provider_ID": "={{ $('Code in JavaScript1').item.json.provider_id }}",
+            "Statut_Message": "TERMINE",
+            "NB_Relance": 0
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "firstName",
+              "displayName": "firstName",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "lastName",
+              "displayName": "lastName",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Provider_ID",
+              "displayName": "Provider_ID",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "IA_Active",
+              "displayName": "IA_Active",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "boolean",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Statut_Message",
+              "displayName": "Statut_Message",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "EN_COURS",
+                  "value": "EN_COURS"
+                },
+                {
+                  "name": "TERMINE",
+                  "value": "TERMINE"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Nombre_Echange",
+              "displayName": "Nombre_Echange",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "NB_Relance",
+              "displayName": "NB_Relance",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Date_Relance",
+              "displayName": "Date_Relance",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Scoring",
+              "displayName": "Scoring",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Justification_Scoring",
+              "displayName": "Justification_Scoring",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "gender",
+              "displayName": "gender",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "male",
+                  "value": "male"
+                },
+                {
+                  "name": "female",
+                  "value": "female"
+                },
+                {
+                  "name": "undetermined",
+                  "value": "undetermined"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "state",
+              "displayName": "state",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "none",
+                  "value": "none"
+                },
+                {
+                  "name": "not_interested",
+                  "value": "not_interested"
+                },
+                {
+                  "name": "later_interested",
+                  "value": "later_interested"
+                },
+                {
+                  "name": "interested",
+                  "value": "interested"
+                },
+                {
+                  "name": "replied",
+                  "value": "replied"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "occupation",
+              "displayName": "occupation",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "job_title",
+              "displayName": "job_title",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "location",
+              "displayName": "location",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Paris et périphérie",
+                  "value": "Paris et périphérie"
+                },
+                {
+                  "name": "France",
+                  "value": "France"
+                },
+                {
+                  "name": "Lyon  Auvergne-Rhône-Alpes  France",
+                  "value": "Lyon  Auvergne-Rhône-Alpes  France"
+                },
+                {
+                  "name": "Paris  Île-de-France  France",
+                  "value": "Paris  Île-de-France  France"
+                },
+                {
+                  "name": "Boulogne-Billancourt  Île-de-France  France",
+                  "value": "Boulogne-Billancourt  Île-de-France  France"
+                },
+                {
+                  "name": "Arcueil  Île-de-France  France",
+                  "value": "Arcueil  Île-de-France  France"
+                },
+                {
+                  "name": "Saint-Leu-la-Forêt  Île-de-France  France",
+                  "value": "Saint-Leu-la-Forêt  Île-de-France  France"
+                },
+                {
+                  "name": "Suresnes  Île-de-France  France",
+                  "value": "Suresnes  Île-de-France  France"
+                },
+                {
+                  "name": "Rantigny  Hauts-de-France  France",
+                  "value": "Rantigny  Hauts-de-France  France"
+                },
+                {
+                  "name": "Sury-le-Comtal  Auvergne-Rhône-Alpes  France",
+                  "value": "Sury-le-Comtal  Auvergne-Rhône-Alpes  France"
+                },
+                {
+                  "name": "Boussy-Saint-Antoine  Île-de-France  France",
+                  "value": "Boussy-Saint-Antoine  Île-de-France  France"
+                },
+                {
+                  "name": "Sartrouville  Île-de-France  France",
+                  "value": "Sartrouville  Île-de-France  France"
+                },
+                {
+                  "name": "Nantes  Pays de la Loire  France",
+                  "value": "Nantes  Pays de la Loire  France"
+                },
+                {
+                  "name": "Jaunay-Marigny  Nouvelle-Aquitaine  France",
+                  "value": "Jaunay-Marigny  Nouvelle-Aquitaine  France"
+                },
+                {
+                  "name": "Digne-les-Bains  Provence-Alpes-Côte d’Azur  France",
+                  "value": "Digne-les-Bains  Provence-Alpes-Côte d’Azur  France"
+                },
+                {
+                  "name": "Chambéry  Auvergne-Rhône-Alpes  France",
+                  "value": "Chambéry  Auvergne-Rhône-Alpes  France"
+                },
+                {
+                  "name": "Saint-Quentin-en-Yvelines  Île-de-France  France",
+                  "value": "Saint-Quentin-en-Yvelines  Île-de-France  France"
+                },
+                {
+                  "name": "Versailles  Île-de-France  France",
+                  "value": "Versailles  Île-de-France  France"
+                },
+                {
+                  "name": "Saint-Étienne  Auvergne-Rhône-Alpes  France",
+                  "value": "Saint-Étienne  Auvergne-Rhône-Alpes  France"
+                },
+                {
+                  "name": "Greater Paris Metropolitan Region",
+                  "value": "Greater Paris Metropolitan Region"
+                },
+                {
+                  "name": "Rueil-Malmaison  Île-de-France  France",
+                  "value": "Rueil-Malmaison  Île-de-France  France"
+                },
+                {
+                  "name": "Valenciennes  Hauts-de-France  France",
+                  "value": "Valenciennes  Hauts-de-France  France"
+                },
+                {
+                  "name": "Argenteuil  Île-de-France  France",
+                  "value": "Argenteuil  Île-de-France  France"
+                },
+                {
+                  "name": "Strasbourg  Grand Est  France",
+                  "value": "Strasbourg  Grand Est  France"
+                },
+                {
+                  "name": "Nancy  Grand Est  France",
+                  "value": "Nancy  Grand Est  France"
+                },
+                {
+                  "name": "Waremme  Région wallonne  Belgique",
+                  "value": "Waremme  Région wallonne  Belgique"
+                },
+                {
+                  "name": "Québec  Quebec  Canada",
+                  "value": "Québec  Quebec  Canada"
+                },
+                {
+                  "name": "Lausanne et périphérie",
+                  "value": "Lausanne et périphérie"
+                },
+                {
+                  "name": "Torreilles  Occitanie  France",
+                  "value": "Torreilles  Occitanie  France"
+                },
+                {
+                  "name": "Angers et périphérie",
+                  "value": "Angers et périphérie"
+                },
+                {
+                  "name": "Maule  Île-de-France  France",
+                  "value": "Maule  Île-de-France  France"
+                },
+                {
+                  "name": "Lille  Hauts-de-France  France",
+                  "value": "Lille  Hauts-de-France  France"
+                },
+                {
+                  "name": "Niort  Nouvelle-Aquitaine  France",
+                  "value": "Niort  Nouvelle-Aquitaine  France"
+                },
+                {
+                  "name": "Bordeaux et périphérie",
+                  "value": "Bordeaux et périphérie"
+                },
+                {
+                  "name": "Puteaux  Île-de-France  France",
+                  "value": "Puteaux  Île-de-France  France"
+                },
+                {
+                  "name": "Bois-Guillaume  Normandie  France",
+                  "value": "Bois-Guillaume  Normandie  France"
+                },
+                {
+                  "name": "St.-Girons  Occitanie  France",
+                  "value": "St.-Girons  Occitanie  France"
+                },
+                {
+                  "name": "Besançon  Bourgogne-Franche-Comté  France",
+                  "value": "Besançon  Bourgogne-Franche-Comté  France"
+                },
+                {
+                  "name": "Sainte-Maxime  Provence-Alpes-Côte d'Azur  France",
+                  "value": "Sainte-Maxime  Provence-Alpes-Côte d'Azur  France"
+                },
+                {
+                  "name": "Toulouse et périphérie",
+                  "value": "Toulouse et périphérie"
+                },
+                {
+                  "name": "Lyon et périphérie",
+                  "value": "Lyon et périphérie"
+                },
+                {
+                  "name": "Toulon  Provence-Alpes-Côte d’Azur  France",
+                  "value": "Toulon  Provence-Alpes-Côte d’Azur  France"
+                },
+                {
+                  "name": "Nantes et périphérie",
+                  "value": "Nantes et périphérie"
+                },
+                {
+                  "name": "Haguenau  Grand Est  France",
+                  "value": "Haguenau  Grand Est  France"
+                },
+                {
+                  "name": "Sélestat  Grand Est  France",
+                  "value": "Sélestat  Grand Est  France"
+                },
+                {
+                  "name": "Saint-Denis  La Réunion",
+                  "value": "Saint-Denis  La Réunion"
+                },
+                {
+                  "name": "Corminboeuf  Fribourg  Suisse",
+                  "value": "Corminboeuf  Fribourg  Suisse"
+                },
+                {
+                  "name": "Pontarlier",
+                  "value": "Pontarlier"
+                },
+                {
+                  "name": "Bezons  Île-de-France  France",
+                  "value": "Bezons  Île-de-France  France"
+                },
+                {
+                  "name": "Plombières-les-Bains  Grand Est  France",
+                  "value": "Plombières-les-Bains  Grand Est  France"
+                },
+                {
+                  "name": "Plailly  Hauts-de-France  France",
+                  "value": "Plailly  Hauts-de-France  France"
+                },
+                {
+                  "name": "Lille et périphérie",
+                  "value": "Lille et périphérie"
+                },
+                {
+                  "name": "Rouen  Normandy  France",
+                  "value": "Rouen  Normandy  France"
+                },
+                {
+                  "name": "Jouarre  Île-de-France  France",
+                  "value": "Jouarre  Île-de-France  France"
+                },
+                {
+                  "name": "Choisy-le-Roi  Île-de-France  France",
+                  "value": "Choisy-le-Roi  Île-de-France  France"
+                },
+                {
+                  "name": "Nice  Provence-Alpes-Côte d’Azur  France",
+                  "value": "Nice  Provence-Alpes-Côte d’Azur  France"
+                },
+                {
+                  "name": "Besné  Pays de la Loire  France",
+                  "value": "Besné  Pays de la Loire  France"
+                },
+                {
+                  "name": "Montpellier et périphérie",
+                  "value": "Montpellier et périphérie"
+                },
+                {
+                  "name": "Fontenay-aux-Roses  Île-de-France  France",
+                  "value": "Fontenay-aux-Roses  Île-de-France  France"
+                },
+                {
+                  "name": "Antony  Île-de-France  France",
+                  "value": "Antony  Île-de-France  France"
+                },
+                {
+                  "name": "Maisons-Laffitte  Île-de-France  France",
+                  "value": "Maisons-Laffitte  Île-de-France  France"
+                },
+                {
+                  "name": "Mennecy  Île-de-France  France",
+                  "value": "Mennecy  Île-de-France  France"
+                },
+                {
+                  "name": "Tours et périphérie",
+                  "value": "Tours et périphérie"
+                },
+                {
+                  "name": "Toulouse  Occitanie  France",
+                  "value": "Toulouse  Occitanie  France"
+                },
+                {
+                  "name": "Chelles  Île-de-France  France",
+                  "value": "Chelles  Île-de-France  France"
+                },
+                {
+                  "name": "Greater Montpellier Metropolitan Area",
+                  "value": "Greater Montpellier Metropolitan Area"
+                },
+                {
+                  "name": "Valence  Auvergne-Rhône-Alpes  France",
+                  "value": "Valence  Auvergne-Rhône-Alpes  France"
+                },
+                {
+                  "name": "Marcey-les-Grèves  Normandie  France",
+                  "value": "Marcey-les-Grèves  Normandie  France"
+                },
+                {
+                  "name": "Le Cannet  Provence-Alpes-Côte d’Azur  France",
+                  "value": "Le Cannet  Provence-Alpes-Côte d’Azur  France"
+                },
+                {
+                  "name": "Rouen et périphérie",
+                  "value": "Rouen et périphérie"
+                },
+                {
+                  "name": "Marcq-en-Baroeul  Hauts-de-France  France",
+                  "value": "Marcq-en-Baroeul  Hauts-de-France  France"
+                },
+                {
+                  "name": "Tremblay-en-France  Île-de-France  France",
+                  "value": "Tremblay-en-France  Île-de-France  France"
+                },
+                {
+                  "name": "Vincennes  Île-de-France  France",
+                  "value": "Vincennes  Île-de-France  France"
+                },
+                {
+                  "name": "Montesson  Île-de-France  France",
+                  "value": "Montesson  Île-de-France  France"
+                },
+                {
+                  "name": "Villeneuve-la-Garenne",
+                  "value": "Villeneuve-la-Garenne"
+                },
+                {
+                  "name": "Paris",
+                  "value": "Paris"
+                },
+                {
+                  "name": "Bordeaux  Nouvelle-Aquitaine  France",
+                  "value": "Bordeaux  Nouvelle-Aquitaine  France"
+                },
+                {
+                  "name": "Courbevoie  Île-de-France  France",
+                  "value": "Courbevoie  Île-de-France  France"
+                },
+                {
+                  "name": "Sceaux  Île-de-France  France",
+                  "value": "Sceaux  Île-de-France  France"
+                },
+                {
+                  "name": "Montreuil  Île-de-France  France",
+                  "value": "Montreuil  Île-de-France  France"
+                },
+                {
+                  "name": "Paris  Île-de-France  Frankreich",
+                  "value": "Paris  Île-de-France  Frankreich"
+                },
+                {
+                  "name": "Ville de Paris  Île-de-France  France",
+                  "value": "Ville de Paris  Île-de-France  France"
+                },
+                {
+                  "name": "Maisons-Alfort",
+                  "value": "Maisons-Alfort"
+                },
+                {
+                  "name": "Bayonne  Nouvelle-Aquitaine  France",
+                  "value": "Bayonne  Nouvelle-Aquitaine  France"
+                },
+                {
+                  "name": "Pantin  Île-de-France  France",
+                  "value": "Pantin  Île-de-France  France"
+                },
+                {
+                  "name": "Nizza  Provence  Frankreich",
+                  "value": "Nizza  Provence  Frankreich"
+                },
+                {
+                  "name": "Coulommiers  Île-de-France  France",
+                  "value": "Coulommiers  Île-de-France  France"
+                },
+                {
+                  "name": "Montigny-le-Bretonneux  Île-de-France  France",
+                  "value": "Montigny-le-Bretonneux  Île-de-France  France"
+                },
+                {
+                  "name": "Clichy  Île-de-France  France",
+                  "value": "Clichy  Île-de-France  France"
+                },
+                {
+                  "name": "Cachan  Île-de-France  France",
+                  "value": "Cachan  Île-de-France  France"
+                },
+                {
+                  "name": "Enghien-les-Bains  Île-de-France  France",
+                  "value": "Enghien-les-Bains  Île-de-France  France"
+                },
+                {
+                  "name": "Toulon  Provence-Alpes-Côte d'Azur  France",
+                  "value": "Toulon  Provence-Alpes-Côte d'Azur  France"
+                },
+                {
+                  "name": "Montpellier  Occitanie  France",
+                  "value": "Montpellier  Occitanie  France"
+                },
+                {
+                  "name": "Rouen  Normandie  France",
+                  "value": "Rouen  Normandie  France"
+                },
+                {
+                  "name": "Poitiers et périphérie",
+                  "value": "Poitiers et périphérie"
+                },
+                {
+                  "name": "Dijon  Bourgogne-Franche-Comté  France",
+                  "value": "Dijon  Bourgogne-Franche-Comté  France"
+                },
+                {
+                  "name": "Les Loges-en-Josas  Île-de-France  France",
+                  "value": "Les Loges-en-Josas  Île-de-France  France"
+                },
+                {
+                  "name": "Neuilly-sur-Seine",
+                  "value": "Neuilly-sur-Seine"
+                },
+                {
+                  "name": "Tours  Centre-Val de Loire  France",
+                  "value": "Tours  Centre-Val de Loire  France"
+                },
+                {
+                  "name": "Greater Nice Metropolitan Area",
+                  "value": "Greater Nice Metropolitan Area"
+                },
+                {
+                  "name": "Anglet  Nouvelle-Aquitaine  France",
+                  "value": "Anglet  Nouvelle-Aquitaine  France"
+                },
+                {
+                  "name": "Francheville  Auvergne-Rhône-Alpes  France",
+                  "value": "Francheville  Auvergne-Rhône-Alpes  France"
+                },
+                {
+                  "name": "Chambéry",
+                  "value": "Chambéry"
+                },
+                {
+                  "name": "Bordeaux",
+                  "value": "Bordeaux"
+                },
+                {
+                  "name": "Reims  Grand Est  France",
+                  "value": "Reims  Grand Est  France"
+                },
+                {
+                  "name": "Aix-en-Provence  Provence-Alpes-Côte d’Azur  France",
+                  "value": "Aix-en-Provence  Provence-Alpes-Côte d’Azur  France"
+                },
+                {
+                  "name": "Champ-du-Boult  Normandie  France",
+                  "value": "Champ-du-Boult  Normandie  France"
+                },
+                {
+                  "name": "Île-de-France  France",
+                  "value": "Île-de-France  France"
+                },
+                {
+                  "name": "Colombes  Île-de-France  France",
+                  "value": "Colombes  Île-de-France  France"
+                },
+                {
+                  "name": "Marseille  Provence-Alpes-Côte d’Azur  France",
+                  "value": "Marseille  Provence-Alpes-Côte d’Azur  France"
+                },
+                {
+                  "name": "Garches  Île-de-France  France",
+                  "value": "Garches  Île-de-France  France"
+                },
+                {
+                  "name": "Villiers-le-Bel  Île-de-France  France",
+                  "value": "Villiers-le-Bel  Île-de-France  France"
+                },
+                {
+                  "name": "Levallois-Perret  Île-de-France  France",
+                  "value": "Levallois-Perret  Île-de-France  France"
+                },
+                {
+                  "name": "Épinay-sous-Sénart  Île-de-France  France",
+                  "value": "Épinay-sous-Sénart  Île-de-France  France"
+                },
+                {
+                  "name": "Carrières-sur-Seine  Île-de-France  France",
+                  "value": "Carrières-sur-Seine  Île-de-France  France"
+                },
+                {
+                  "name": "Palaiseau  Île-de-France  France",
+                  "value": "Palaiseau  Île-de-France  France"
+                },
+                {
+                  "name": "Viroflay",
+                  "value": "Viroflay"
+                },
+                {
+                  "name": "Marne-la-Vallée  Île-de-France  France",
+                  "value": "Marne-la-Vallée  Île-de-France  France"
+                },
+                {
+                  "name": "Aubervilliers  Île-de-France  France",
+                  "value": "Aubervilliers  Île-de-France  France"
+                },
+                {
+                  "name": "Marly-le-Roi  Île-de-France  France",
+                  "value": "Marly-le-Roi  Île-de-France  France"
+                },
+                {
+                  "name": "Joinville-le-Pont  Île-de-France  France",
+                  "value": "Joinville-le-Pont  Île-de-France  France"
+                },
+                {
+                  "name": "Marseille et périphérie",
+                  "value": "Marseille et périphérie"
+                },
+                {
+                  "name": "Dinan  Bretagne  France",
+                  "value": "Dinan  Bretagne  France"
+                },
+                {
+                  "name": "Nogent-sur-Marne  Île-de-France  France",
+                  "value": "Nogent-sur-Marne  Île-de-France  France"
+                },
+                {
+                  "name": "Recloses  Île-de-France  France",
+                  "value": "Recloses  Île-de-France  France"
+                },
+                {
+                  "name": "Le Coudray-Montceaux  Île-de-France  France",
+                  "value": "Le Coudray-Montceaux  Île-de-France  France"
+                },
+                {
+                  "name": "Meaux  Île-de-France  France",
+                  "value": "Meaux  Île-de-France  France"
+                },
+                {
+                  "name": "Saint-Maur-des-Fossés  Île-de-France  France",
+                  "value": "Saint-Maur-des-Fossés  Île-de-France  France"
+                },
+                {
+                  "name": "Noisy-le-Grand  Île-de-France  France",
+                  "value": "Noisy-le-Grand  Île-de-France  France"
+                },
+                {
+                  "name": "Massy  Île-de-France  France",
+                  "value": "Massy  Île-de-France  France"
+                },
+                {
+                  "name": "Neauphle-le-Château  Île-de-France  France",
+                  "value": "Neauphle-le-Château  Île-de-France  France"
+                },
+                {
+                  "name": "Nice  Provence-Alpes-Côte d'Azur  France",
+                  "value": "Nice  Provence-Alpes-Côte d'Azur  France"
+                },
+                {
+                  "name": "Gainford  Angleterre  Royaume-Uni",
+                  "value": "Gainford  Angleterre  Royaume-Uni"
+                },
+                {
+                  "name": "La Garenne-Colombes  Île-de-France  France",
+                  "value": "La Garenne-Colombes  Île-de-France  France"
+                },
+                {
+                  "name": "Beauvais  Hauts-de-France  France",
+                  "value": "Beauvais  Hauts-de-France  France"
+                },
+                {
+                  "name": "Marseille  Provence-Alpes-Côte d'Azur  France",
+                  "value": "Marseille  Provence-Alpes-Côte d'Azur  France"
+                },
+                {
+                  "name": "Comté de Nairobi  Kenya",
+                  "value": "Comté de Nairobi  Kenya"
+                },
+                {
+                  "name": "Cuyapo  Région III (Luçon Centrale)  Philippines",
+                  "value": "Cuyapo  Région III (Luçon Centrale)  Philippines"
+                },
+                {
+                  "name": "Agusan du Nord  Région XIII (Caraga)  Philippines",
+                  "value": "Agusan du Nord  Région XIII (Caraga)  Philippines"
+                },
+                {
+                  "name": "Copenhague  Hovedstaden  Danemark",
+                  "value": "Copenhague  Hovedstaden  Danemark"
+                },
+                {
+                  "name": "Sargodha  Punjab  Pakistan",
+                  "value": "Sargodha  Punjab  Pakistan"
+                },
+                {
+                  "name": "Région IV-A (Calabarzon)  Philippines",
+                  "value": "Région IV-A (Calabarzon)  Philippines"
+                },
+                {
+                  "name": "Pagadian  Zamboanga Peninsula  Philippines",
+                  "value": "Pagadian  Zamboanga Peninsula  Philippines"
+                },
+                {
+                  "name": "Pakistan",
+                  "value": "Pakistan"
+                },
+                {
+                  "name": "Puerto Princesa  Région IV-B (Mimaropa)  Philippines",
+                  "value": "Puerto Princesa  Région IV-B (Mimaropa)  Philippines"
+                },
+                {
+                  "name": "Sofia  Sofia  Bulgarie",
+                  "value": "Sofia  Sofia  Bulgarie"
+                },
+                {
+                  "name": "Maastricht  Limbourg  Pays-Bas",
+                  "value": "Maastricht  Limbourg  Pays-Bas"
+                },
+                {
+                  "name": "Vaujours  Île-de-France  France",
+                  "value": "Vaujours  Île-de-France  France"
+                },
+                {
+                  "name": "Courbevoie",
+                  "value": "Courbevoie"
+                },
+                {
+                  "name": "Domont  Île-de-France  France",
+                  "value": "Domont  Île-de-France  France"
+                },
+                {
+                  "name": "Omerville  Île-de-France  France",
+                  "value": "Omerville  Île-de-France  France"
+                },
+                {
+                  "name": "Livry-Gargan  Île-de-France  France",
+                  "value": "Livry-Gargan  Île-de-France  France"
+                },
+                {
+                  "name": "Clamart  Île-de-France  France",
+                  "value": "Clamart  Île-de-France  France"
+                },
+                {
+                  "name": "Fontainebleau  Île-de-France  France",
+                  "value": "Fontainebleau  Île-de-France  France"
+                },
+                {
+                  "name": "La Chapelle-des-Marais  Pays de la Loire  France",
+                  "value": "La Chapelle-des-Marais  Pays de la Loire  France"
+                },
+                {
+                  "name": "Toulouse",
+                  "value": "Toulouse"
+                },
+                {
+                  "name": "Colmar  Grand Est  France",
+                  "value": "Colmar  Grand Est  France"
+                },
+                {
+                  "name": "La Haye  Hollande Méridionale  Pays-Bas",
+                  "value": "La Haye  Hollande Méridionale  Pays-Bas"
+                },
+                {
+                  "name": "Annecy  Auvergne-Rhône-Alpes  France",
+                  "value": "Annecy  Auvergne-Rhône-Alpes  France"
+                },
+                {
+                  "name": "Châteauroux",
+                  "value": "Châteauroux"
+                },
+                {
+                  "name": "Vannes  Bretagne  France",
+                  "value": "Vannes  Bretagne  France"
+                },
+                {
+                  "name": "Chambly  Hauts-de-France  France",
+                  "value": "Chambly  Hauts-de-France  France"
+                },
+                {
+                  "name": "Tours",
+                  "value": "Tours"
+                },
+                {
+                  "name": "Bourg-en-Bresse  Auvergne-Rhône-Alpes  France",
+                  "value": "Bourg-en-Bresse  Auvergne-Rhône-Alpes  France"
+                },
+                {
+                  "name": "La Rochelle et périphérie",
+                  "value": "La Rochelle et périphérie"
+                },
+                {
+                  "name": "Cagnes-sur-Mer  Provence-Alpes-Côte d’Azur  France",
+                  "value": "Cagnes-sur-Mer  Provence-Alpes-Côte d’Azur  France"
+                },
+                {
+                  "name": "Gennevilliers  Île-de-France  France",
+                  "value": "Gennevilliers  Île-de-France  France"
+                },
+                {
+                  "name": "Antananarivo  Analamanga  Madagascar",
+                  "value": "Antananarivo  Analamanga  Madagascar"
+                },
+                {
+                  "name": "Perpignan  Occitanie  France",
+                  "value": "Perpignan  Occitanie  France"
+                },
+                {
+                  "name": "Monaco",
+                  "value": "Monaco"
+                },
+                {
+                  "name": "Aumale  Normandie  France",
+                  "value": "Aumale  Normandie  France"
+                },
+                {
+                  "name": "Saint-Rémy-de-Provence  Provence-Alpes-Côte d’Azur  France",
+                  "value": "Saint-Rémy-de-Provence  Provence-Alpes-Côte d’Azur  France"
+                },
+                {
+                  "name": "La Chaussée-Saint-Victor  Centre-Val de Loire  France",
+                  "value": "La Chaussée-Saint-Victor  Centre-Val de Loire  France"
+                },
+                {
+                  "name": "Grenoble  Auvergne-Rhône-Alpes  France",
+                  "value": "Grenoble  Auvergne-Rhône-Alpes  France"
+                },
+                {
+                  "name": "Treillières  Pays de la Loire  France",
+                  "value": "Treillières  Pays de la Loire  France"
+                },
+                {
+                  "name": "Malakoff  Île-de-France  France",
+                  "value": "Malakoff  Île-de-France  France"
+                },
+                {
+                  "name": "Cabourg  Normandie  France",
+                  "value": "Cabourg  Normandie  France"
+                },
+                {
+                  "name": "Bois-Colombes  Île-de-France  France",
+                  "value": "Bois-Colombes  Île-de-France  France"
+                },
+                {
+                  "name": "Saint-Pavace  Pays de la Loire  France",
+                  "value": "Saint-Pavace  Pays de la Loire  France"
+                },
+                {
+                  "name": "Saint-Pierre-du-Mont  Nouvelle-Aquitaine  France",
+                  "value": "Saint-Pierre-du-Mont  Nouvelle-Aquitaine  France"
+                },
+                {
+                  "name": "Mons-en-Baroeul  Hauts-de-France  France",
+                  "value": "Mons-en-Baroeul  Hauts-de-France  France"
+                },
+                {
+                  "name": "Neuilly-sur-Seine  Île-de-France  France",
+                  "value": "Neuilly-sur-Seine  Île-de-France  France"
+                },
+                {
+                  "name": "Rennes  Bretagne  France",
+                  "value": "Rennes  Bretagne  France"
+                },
+                {
+                  "name": "Gif-sur-Yvette  Île-de-France  France",
+                  "value": "Gif-sur-Yvette  Île-de-France  France"
+                },
+                {
+                  "name": "Saint-Rémy-lès-Chevreuse  Île-de-France  France",
+                  "value": "Saint-Rémy-lès-Chevreuse  Île-de-France  France"
+                },
+                {
+                  "name": "Sennecey-le-Grand  Bourgogne-Franche-Comté  France",
+                  "value": "Sennecey-le-Grand  Bourgogne-Franche-Comté  France"
+                },
+                {
+                  "name": "Avignon  Provence-Alpes-Côte d’Azur  France",
+                  "value": "Avignon  Provence-Alpes-Côte d’Azur  France"
+                },
+                {
+                  "name": "Troyes et périphérie",
+                  "value": "Troyes et périphérie"
+                },
+                {
+                  "name": "Caen  Normandie  France",
+                  "value": "Caen  Normandie  France"
+                },
+                {
+                  "name": "Bartenheim  Grand Est  France",
+                  "value": "Bartenheim  Grand Est  France"
+                },
+                {
+                  "name": "Le Perray-en-Yvelines  Île-de-France  France",
+                  "value": "Le Perray-en-Yvelines  Île-de-France  France"
+                },
+                {
+                  "name": "Le Mans et périphérie",
+                  "value": "Le Mans et périphérie"
+                },
+                {
+                  "name": "Paris  Ilha de França  França",
+                  "value": "Paris  Ilha de França  França"
+                },
+                {
+                  "name": "Gentilly  Île-de-France  France",
+                  "value": "Gentilly  Île-de-France  France"
+                },
+                {
+                  "name": "Jurançon  Nouvelle-Aquitaine  France",
+                  "value": "Jurançon  Nouvelle-Aquitaine  France"
+                },
+                {
+                  "name": "L’Étang-la-Ville  Île-de-France  France",
+                  "value": "L’Étang-la-Ville  Île-de-France  France"
+                },
+                {
+                  "name": "Lesquin  Hauts-de-France  France",
+                  "value": "Lesquin  Hauts-de-France  France"
+                },
+                {
+                  "name": "Plaisir  Île-de-France  France",
+                  "value": "Plaisir  Île-de-France  France"
+                },
+                {
+                  "name": "Chamalières  Auvergne-Rhône-Alpes  France",
+                  "value": "Chamalières  Auvergne-Rhône-Alpes  France"
+                },
+                {
+                  "name": "Nîmes  Occitanie  France",
+                  "value": "Nîmes  Occitanie  France"
+                },
+                {
+                  "name": "Caen et périphérie",
+                  "value": "Caen et périphérie"
+                },
+                {
+                  "name": "Clermont-Ferrand  Auvergne-Rhône-Alpes  France",
+                  "value": "Clermont-Ferrand  Auvergne-Rhône-Alpes  France"
+                },
+                {
+                  "name": "Rennes et périphérie",
+                  "value": "Rennes et périphérie"
+                },
+                {
+                  "name": "Nice et périphérie",
+                  "value": "Nice et périphérie"
+                },
+                {
+                  "name": "Rennes  Brittany  France",
+                  "value": "Rennes  Brittany  France"
+                },
+                {
+                  "name": "Maisons-Alfort  Île-de-France  France",
+                  "value": "Maisons-Alfort  Île-de-France  France"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "linkedinEmail",
+              "displayName": "linkedinEmail",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Résumé du profil",
+              "displayName": "Résumé du profil",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "proEmail",
+              "displayName": "proEmail",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "phoneNumbers",
+              "displayName": "phoneNumbers",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "prospectList",
+              "displayName": "prospectList",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "INDEPENDANT FRANCE",
+                  "value": "INDEPENDANT FRANCE"
+                },
+                {
+                  "name": "DIRIGEANT FRANCE",
+                  "value": "DIRIGEANT FRANCE"
+                },
+                {
+                  "name": "Agent immobilier",
+                  "value": "Agent immobilier"
+                },
+                {
+                  "name": "Avocat",
+                  "value": "Avocat"
+                },
+                {
+                  "name": "Architecte",
+                  "value": "Architecte"
+                },
+                {
+                  "name": "Coach",
+                  "value": "Coach"
+                },
+                {
+                  "name": "Responsables Marketing",
+                  "value": "Responsables Marketing"
+                },
+                {
+                  "name": "Test",
+                  "value": "Test"
+                },
+                {
+                  "name": "Social Media Manager",
+                  "value": "Social Media Manager"
+                },
+                {
+                  "name": "Content Manager",
+                  "value": "Content Manager"
+                },
+                {
+                  "name": "Consultant Commercial",
+                  "value": "Consultant Commercial"
+                },
+                {
+                  "name": "Lead Generation Specialist",
+                  "value": "Lead Generation Specialist"
+                },
+                {
+                  "name": "Appointment Setter",
+                  "value": "Appointment Setter"
+                },
+                {
+                  "name": "Community manager",
+                  "value": "Community manager"
+                },
+                {
+                  "name": "Heygen",
+                  "value": "Heygen"
+                },
+                {
+                  "name": "My prospect list",
+                  "value": "My prospect list"
+                },
+                {
+                  "name": "IA CURIOUS",
+                  "value": "IA CURIOUS"
+                },
+                {
+                  "name": "IA CURIOUS INVIT ACCEPT",
+                  "value": "IA CURIOUS INVIT ACCEPT"
+                },
+                {
+                  "name": "IA - Brut",
+                  "value": "IA - Brut"
+                },
+                {
+                  "name": "IA - Qualifiés",
+                  "value": "IA - Qualifiés"
+                },
+                {
+                  "name": "Learning & Devellopement",
+                  "value": "Learning & Devellopement"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "linkedinUrl",
+              "displayName": "linkedinUrl",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "premium",
+              "displayName": "premium",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Yes",
+                  "value": "Yes"
+                },
+                {
+                  "name": "No",
+                  "value": "No"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "jobSeeker",
+              "displayName": "jobSeeker",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Yes",
+                  "value": "Yes"
+                },
+                {
+                  "name": "No",
+                  "value": "No"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "profileStatus",
+              "displayName": "profileStatus",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "connected",
+                  "value": "connected"
+                },
+                {
+                  "name": "pending",
+                  "value": "pending"
+                },
+                {
+                  "name": "not_connected",
+                  "value": "not_connected"
+                },
+                {
+                  "name": "unknown",
+                  "value": "unknown"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "messageSent",
+              "displayName": "messageSent",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Yes",
+                  "value": "Yes"
+                },
+                {
+                  "name": "No",
+                  "value": "No"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "messageReplied",
+              "displayName": "messageReplied",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Yes",
+                  "value": "Yes"
+                },
+                {
+                  "name": "No",
+                  "value": "No"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "emailSent",
+              "displayName": "emailSent",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "No",
+                  "value": "No"
+                },
+                {
+                  "name": "Yes",
+                  "value": "Yes"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "emailReplied",
+              "displayName": "emailReplied",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "No",
+                  "value": "No"
+                },
+                {
+                  "name": "Yes",
+                  "value": "Yes"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "salesNavigatorId",
+              "displayName": "salesNavigatorId",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "firstMessageAt",
+              "displayName": "firstMessageAt",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "lastLinkedinReplyDate",
+              "displayName": "lastLinkedinReplyDate",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "lastEmailReplyDate",
+              "displayName": "lastEmailReplyDate",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "lastLinkedinMessageSentDate",
+              "displayName": "lastLinkedinMessageSentDate",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "lastEmailSentDate",
+              "displayName": "lastEmailSentDate",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "lastReplyDetected",
+              "displayName": "lastReplyDetected",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "lastReplyDetectedDate",
+              "displayName": "lastReplyDetectedDate",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "connectionRequestDate",
+              "displayName": "connectionRequestDate",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "profilePictureUrl",
+              "displayName": "profilePictureUrl",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "importDate",
+              "displayName": "importDate",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "tags",
+              "displayName": "tags",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "company_name",
+              "displayName": "company_name",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "company_website",
+              "displayName": "company_website",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "company_linkedinUrl",
+              "displayName": "company_linkedinUrl",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "linkedInConversationLink",
+              "displayName": "linkedInConversationLink",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "country",
+              "displayName": "country",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "crmType",
+              "displayName": "crmType",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "crmExternId",
+              "displayName": "crmExternId",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "crmStatus",
+              "displayName": "crmStatus",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "not_synced",
+                  "value": "not_synced"
+                },
+                {
+                  "name": "sync",
+                  "value": "sync"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "connectedAt",
+              "displayName": "connectedAt",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "createdDate",
+              "displayName": "createdDate",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Last Modified",
+              "displayName": "Last Modified",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Status_Invit",
+              "displayName": "Status_Invit",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Invitation Reçue",
+                  "value": "Invitation Reçue"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        1440,
+        32
+      ],
+      "id": "4589148f-3b02-435f-9470-915d634ae690",
+      "name": "Create a record",
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "PVdMVpjlZc5wTrnN",
+          "name": "Airtable Personal Access Token account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api22.unipile.com:15267/api/v1/chats/",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-KEY",
+              "value": "___REDACTED_UNIPILE_KEY___"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "attendees_ids",
+              "value": "={{ $('Code in JavaScript1').item.json.provider_id }}"
+            },
+            {
+              "name": "text",
+              "value": "={{ $json.output[0].content[0].text }}"
+            },
+            {
+              "name": "account_id",
+              "value": "BY85po44SUyPqFR8pbrm0Q"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1664,
+        32
+      ],
+      "id": "d31fe3eb-7a00-405a-869b-9109cabca4de",
+      "name": "ENVOIE MESSAGE",
+      "retryOnFail": false,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "8c00f782-be62-4dd0-93f2-78ba6d0d4c7c",
+              "leftValue": "={{ $('Split Out').item.json.invitation_text }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "empty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        768,
+        32
+      ],
+      "id": "16d20ec3-a042-4e3d-b6c0-6f0f08b26d80",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "lk_clients_config",
+        "returnAll": true
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        -128,
+        624
+      ],
+      "id": "b47db848-1234-4775-9a45-db2477b69fe6",
+      "name": "Get clients (lk_clients_config)",
+      "credentials": {
+        "supabaseApi": {
+          "id": "mWip0WqnB57aANW3",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        96,
+        624
+      ],
+      "id": "39d7a719-2d45-49ed-b104-83a7e1bfdd35",
+      "name": "Boucle par client"
+    },
+    {
+      "parameters": {
+        "url": "https://api22.unipile.com:15267/api/v1/users/invite/received",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "account_id",
+              "value": "={{ $('Boucle par client').item.json.account_id }}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        320,
+        480
+      ],
+      "id": "b3da60af-745d-4eca-a05e-d1476346ddb6",
+      "name": "GET Invitations Recues",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "mNQkc2EST14d7fGl",
+          "name": "Unipile API - LinkedIn"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "=https://api22.unipile.com:15267/api/v1/users/{{ $json.provider_id }}/posts",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "account_id",
+              "value": "={{ $('Boucle par client').item.json.account_id }}"
+            },
+            {
+              "name": "limit",
+              "value": "3"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1648,
+        480
+      ],
+      "id": "a5a4ca38-ce5d-4857-91c1-425b2c08fbcb",
+      "name": "Unipile - Recuperer Posts1",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "mNQkc2EST14d7fGl",
+          "name": "Unipile API - LinkedIn"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 */30 8-19 * * 1-6"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -352,
+        624
+      ],
+      "id": "56a7c595-891a-4b99-a91a-fa0cb1c90b05",
+      "name": "Toutes les 30 min1"
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "items",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        976,
+        480
+      ],
+      "id": "c1835d78-b846-4a27-9fe2-0f6b8b2622f6",
+      "name": "Split Out1",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api22.unipile.com:15267/api/v1/users/invite/received/{{ $json.id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "action",
+              "value": "accept"
+            },
+            {
+              "name": "account_id",
+              "value": "={{ $('Boucle par client').item.json.account_id }}"
+            },
+            {
+              "name": "provider",
+              "value": "={{ $json.specifics.provider }}"
+            },
+            {
+              "name": "shared_secret",
+              "value": "={{ $json.specifics.shared_secret }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1200,
+        480
+      ],
+      "id": "66f9b8e0-7033-4e3a-9bdf-fc5ef67fc437",
+      "name": "ACCEPTER Invitation1",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "mNQkc2EST14d7fGl",
+          "name": "Unipile API - LinkedIn"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "=https://api22.unipile.com:15267/api/v1/users/{{ $('Split Out1').item.json.inviter.inviter_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "account_id",
+              "value": "={{ $('Boucle par client').item.json.account_id }}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1424,
+        480
+      ],
+      "id": "6b6a6c5b-97c4-4288-bf83-31f33921919f",
+      "name": "RECUP RELATION",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "mNQkc2EST14d7fGl",
+          "name": "Unipile API - LinkedIn"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// 1. On recupere les posts\nconst items = $input.all().map(item => item.json);\n\nconst limiteDate = new Date();\nlimiteDate.setMonth(limiteDate.getMonth() - 12);\n\nlet postsTexte = \"\";\nlet compteur = 1;\n\nfor (const item of items) {\n  if (item.object === \"PostList\" && item.items) {\n    for (const post of item.items) {\n      if (post.is_repost === true) continue;\n      const datePost = new Date(post.parsed_datetime);\n      if (datePost >= limiteDate) {\n        postsTexte += `POST ${compteur} :\\n${post.text}\\n\\n`;\n        compteur++;\n      }\n    }\n  }\n}\n\n// 2. provider_id depuis RECUP RELATION1\nconst prospectData = $('RECUP RELATION').first().json;\nconst providerId = prospectData.provider_id;\n\nconst prenom = prospectData.first_name || \"Candidat\";\nconst nom = prospectData.last_name || \"\";\nconst poste = prospectData.headline || \"Poste non renseigne\";\nconst emailPro = prospectData.email || \"\";\n\nreturn [{\n  json: {\n    prenom,\n    nom,\n    poste,\n    posts_texte: postsTexte.trim() || \"Pas de posts originaux sur les 12 derniers mois.\",\n    provider_id: providerId,\n    job_title: poste,\n    email_pro: emailPro\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1872,
+        480
+      ],
+      "id": "953d3000-c739-4cae-9bae-fb2a95a462e3",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api22.unipile.com:15267/api/v1/chats/",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-KEY",
+              "value": "___REDACTED_UNIPILE_KEY___"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "attendees_ids",
+              "value": "={{ $('Code in JavaScript1').item.json.provider_id }}"
+            },
+            {
+              "name": "text",
+              "value": "={{ $json.output[0].content[0].text }}"
+            },
+            {
+              "name": "account_id",
+              "value": "BY85po44SUyPqFR8pbrm0Q"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        2800,
+        800
+      ],
+      "id": "7d137a20-513f-450d-ace6-e171cdaaf44c",
+      "name": "ENVOIE MESSAGE1",
+      "retryOnFail": false,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "claude-sonnet-4-6",
+          "mode": "list",
+          "cachedResultName": "claude-sonnet-4-6"
+        },
+        "messages": {
+          "values": [
+            {}
+          ]
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.anthropic",
+      "typeVersion": 1,
+      "position": [
+        2448,
+        800
+      ],
+      "id": "472252b1-777c-416a-b686-79801ead15c7",
+      "name": "Message a model",
+      "credentials": {
+        "anthropicApi": {
+          "id": "H0m8ZPv5z3Omd0Cw",
+          "name": "Anthropic account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "lk_clients_config",
+        "limit": 1,
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "account_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Code in JavaScript').item.json.account_id }}"
+            }
+          ]
+        }
+      },
+      "id": "8cd18437-b629-48e0-9aa0-939ceed75261",
+      "name": "Supabase - Config client",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        2096,
+        560
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": "mWip0WqnB57aANW3",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "lk_agent_assignments",
+        "limit": 1,
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "account_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Code in JavaScript').item.json.account_id }}"
+            },
+            {
+              "keyName": "role",
+              "condition": "eq",
+              "keyValue": "intent"
+            }
+          ]
+        }
+      },
+      "id": "c8a95f60-324d-4289-9edf-d4b0ec865830",
+      "name": "Supabase - Assignation icebreaker",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        2320,
+        560
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": "mWip0WqnB57aANW3",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "lk_agents",
+        "limit": 1,
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $(\"Supabase - Assignation icebreaker\").item.json.agent_id }}"
+            }
+          ]
+        }
+      },
+      "id": "368b07e5-e17c-4b42-b151-576d81ffc2c7",
+      "name": "Supabase - Prompt icebreaker",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        2544,
+        560
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": "mWip0WqnB57aANW3",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "tableId": "lk_prospects",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "account_id",
+              "fieldValue": "={{ $('Code in JavaScript').item.json.account_id }}"
+            },
+            {
+              "fieldId": "linkedin_id",
+              "fieldValue": "={{ $('Unipile - Profil prospect').item.json.provider_id }}"
+            },
+            {
+              "fieldId": "full_name",
+              "fieldValue": "={{ $('Code in JavaScript').item.json.user_full_name }}"
+            },
+            {
+              "fieldId": "status",
+              "fieldValue": "in_conversation"
+            },
+            {
+              "fieldId": "connected_at",
+              "fieldValue": "={{ new Date().toISOString() }}"
+            },
+            {
+              "fieldId": "chat_id",
+              "fieldValue": "={{ $(\"Unipile - Envoyer icebreaker\").item.json.message_id }}"
+            },
+            {
+              "fieldId": "profile_picture_url",
+              "fieldValue": "={{ $('Code in JavaScript').item.json.user_picture_url }}"
+            },
+            {
+              "fieldId": "occupation",
+              "fieldValue": "={{ $(\"Code - Resume profil\").item.json.occupation }}"
+            },
+            {
+              "fieldId": "company_name",
+              "fieldValue": "={{ $(\"Code - Resume profil\").item.json.company_name }}"
+            },
+            {
+              "fieldId": "linkedin_url",
+              "fieldValue": "={{ $('Code in JavaScript').item.json.user_profile_url }}"
+            },
+            {
+              "fieldId": "profile_summary",
+              "fieldValue": "={{ $(\"Code - Resume profil\").item.json.profile_summary }}"
+            },
+            {
+              "fieldId": "message_count",
+              "fieldValue": "1"
+            }
+          ]
+        }
+      },
+      "id": "b3895dd7-af60-431c-af16-f109d1bb44e0",
+      "name": "Supabase - Creer prospect",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        3024,
+        800
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": "mWip0WqnB57aANW3",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "tableId": "lk_messages",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "prospect_id",
+              "fieldValue": "={{ $(\"Supabase - Creer prospect\").item.json.id }}"
+            },
+            {
+              "fieldId": "account_id",
+              "fieldValue": "={{ $('Code in JavaScript').item.json.account_id }}"
+            },
+            {
+              "fieldId": "direction",
+              "fieldValue": "outbound"
+            },
+            {
+              "fieldId": "content",
+              "fieldValue": "={{ $('Claude - Icebreaker').item.json.content[0].text }}"
+            },
+            {
+              "fieldId": "message_id",
+              "fieldValue": "={{ $(\"Unipile - Envoyer icebreaker\").item.json.message_id }}"
+            }
+          ]
+        }
+      },
+      "id": "84a21e0f-aed8-4f4d-9d5f-75b5c5ddf0d0",
+      "name": "Supabase - Enregistrer message",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        3248,
+        800
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": "mWip0WqnB57aANW3",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "36cdc82c-ebfe-4154-9fe2-8f63bc113367",
+              "leftValue": "={{ $json.cursor }}",
+              "rightValue": "null",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        752,
+        480
+      ],
+      "id": "73fce2a8-42d4-43ab-9579-44fb35975d1a",
+      "name": "If1"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        528,
+        480
+      ],
+      "id": "0d21859f-28a7-49bb-a79e-09fa91e5e291",
+      "name": "Wait",
+      "webhookId": "9fc738d4-76db-4a21-a16c-5abb27bfc328"
+    }
+  ],
+  "pinData": {
+    "Toutes les 30 min1": [
+      {
+        "json": {
+          "timestamp": "2026-06-16T13:00:00.029+02:00",
+          "Readable date": "June 16th 2026, 1:00:00 pm",
+          "Readable time": "1:00:00 pm",
+          "Day of week": "Tuesday",
+          "Year": "2026",
+          "Month": "June",
+          "Day of month": "16",
+          "Hour": "13",
+          "Minute": "00",
+          "Second": "00",
+          "Timezone": "Europe/Berlin (UTC+02:00)"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Toutes les 30 min": {
+      "main": [
+        []
+      ]
+    },
+    "GET Invitations Reçues": {
+      "main": [
+        [
+          {
+            "node": "Split Out",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ACCEPTER Invitation": {
+      "main": [
+        [
+          {
+            "node": "RECUP RELATION1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Out": {
+      "main": [
+        [
+          {
+            "node": "ACCEPTER Invitation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Unipile - Récupérer Posts1": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "Create a record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RECUP RELATION1": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create a record": {
+      "main": [
+        [
+          {
+            "node": "ENVOIE MESSAGE",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Unipile - Récupérer Posts1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get clients (lk_clients_config)": {
+      "main": [
+        [
+          {
+            "node": "Boucle par client",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Boucle par client": {
+      "main": [
+        [],
+        [
+          {
+            "node": "GET Invitations Recues",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GET Invitations Recues": {
+      "main": [
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Unipile - Recuperer Posts1": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Toutes les 30 min1": {
+      "main": [
+        [
+          {
+            "node": "Get clients (lk_clients_config)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Out1": {
+      "main": [
+        [
+          {
+            "node": "ACCEPTER Invitation1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ACCEPTER Invitation1": {
+      "main": [
+        [
+          {
+            "node": "RECUP RELATION",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RECUP RELATION": {
+      "main": [
+        [
+          {
+            "node": "Unipile - Recuperer Posts1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Supabase - Config client",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase - Config client": {
+      "main": [
+        [
+          {
+            "node": "Supabase - Assignation icebreaker",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Boucle par client",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase - Assignation icebreaker": {
+      "main": [
+        [
+          {
+            "node": "Supabase - Prompt icebreaker",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase - Prompt icebreaker": {
+      "main": [
+        []
+      ]
+    },
+    "Supabase - Creer prospect": {
+      "main": [
+        [
+          {
+            "node": "Supabase - Enregistrer message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ENVOIE MESSAGE1": {
+      "main": [
+        [
+          {
+            "node": "Supabase - Creer prospect",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message a model": {
+      "main": [
+        [
+          {
+            "node": "ENVOIE MESSAGE1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If1": {
+      "main": [
+        [
+          {
+            "node": "Split Out1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Boucle par client",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "If1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": true
+  },
+  "versionId": "bf06585e-fa42-4127-9a65-60f4ff185ee6",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "14e09279a0e20e70e8b0a269c2cfc5795ea69f614e7138110af3dec7e7956b68"
+  },
+  "id": "IBiW7XPBmFjupoWy",
+  "tags": []
+}

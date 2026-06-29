@@ -5,6 +5,22 @@ Pour la vue d'ensemble par phases, voir [ROADMAP.md](./ROADMAP.md).
 
 ## 2026-06-29 — Audit builder agents vs 24 questions Geoffrey (méta-prompt + base de connaissance)
 
+### Bug Karine : icebreakers envoyés à des connexions non invitées par le SaaS (investigation + fix n8n)
+- Symptôme : 3 icebreakers partis le 29/06 ~09:00 pour Karine (`k.letennier@atil-evenements.com`, account `YIKlrU-VRTG4_VyElJMheg`) vers Vincent Bechtel / Cédric Parat / David Le Tiec.
+- Cause racine 1 : le WF Icebreaker `0yQOYs1Ffiqtj4IX` ne lisait JAMAIS `lk_clients_config.icebreaker_enabled`. Il testait `lk_agent_assignments.is_enabled` (toggle par rôle) en le confondant avec le master switch. Les deux colonnes coexistent (dashboard : `toggleRoleEnabled` vs `toggleIcebreakerEnabled`).
+- Cause racine 2 : le webhook `new_relation` enrôlait TOUTE connexion acceptée (INSERT aveugle), sans vérifier que le SaaS avait invité la personne. Karine = 0 ligne dans `lk_search_results` → elle a invité ces 3 profils à la main.
+- Fait d'archi confirmé : les invités du SaaS sont tracés dans `lk_search_results` (status `invited`, `provider_id` format `ACoAA...` = `user_provider_id` du webhook), PAS dans lk_prospects.
+- Fix n8n (guidé UI, pas SDK) : (1) gate `If` génération + (2) gate `If2` envoi vérifient désormais `icebreaker_enabled` ; (3) nouveau nœud `Supabase - Verif invite SaaS` (getAll `lk_search_results` filtré account_id+provider_id+status=invited, limit 1) inséré entre `IF - Exclure compte test (Geoffrey)` et `Supabase - Config client` → 0 item = branche stoppée ; (4) nœud `Update Prospect` remet `processing_status=idle` + vide pending_reply/scheduled_send_at après envoi (verrou processing jamais relâché).
+- Nettoyage SQL des 3 prospects (processing_status=idle, file vidée, ai_enabled=false). Lignes conservées (vraies conversations LinkedIn).
+- Point ouvert : test de bout en bout (invitation manuelle → vérifier que `Verif invite SaaS` renvoie 0 item et stoppe). Dette UI : unifier les deux switches `icebreaker_enabled` (config) et `is_enabled` (assignation).
+
+### Rangement des workflows n8n dans le repo (nouveau)
+- Créé `docs/n8n/` : index README (tableau des 6 workflows nom/ID/rôle/statut/date) + copies JSON nettoyées des workflows live. Pointeur ajouté dans CLAUDE.md (section Pipeline n8n) et dans `docs/n8n/README.md`.
+- 6 workflows rangés : Génère lien connexion `wtLJvVIhegJj8szS`, Unipile Notify `i8kR9LQwN8S1GPoH`, Icebreaker LinkedIn `0yQOYs1Ffiqtj4IX`, Conversation `fsSw8bIknV1cAgKx`, Cron invitations+scraping `u9NRd0JkerDhuipM`, IceBreaker #2 legacy Airtable `IBiW7XPBmFjupoWy` (désactivé).
+- ALERTE SÉCURITÉ : la `service_role` Supabase + 2 clés Unipile étaient en dur dans les exports (cron + notify). Mises en place pour ne JAMAIS les committer : dossier brut `.n8n-raw/` gitignoré + script `docs/n8n/sanitize.mjs` qui caviarde tout JWT et les clés Unipile connues. Vérifié : 27 secrets caviardés, 0 résiduel dans les fichiers rangés.
+- Process de mise à jour acté : re-export n8n -> déposer dans `.n8n-raw/` -> `node docs/n8n/sanitize.mjs` -> MAJ date dans README.
+- Point ouvert (SÉCURITÉ, décidé "plus tard") : faire tourner la `service_role` Supabase (compromise) et basculer les usages en dur dans n8n vers des credentials. Mémoire dédiée créée.
+
 ### Audit (pas de code modifié, session d'analyse)
 - Passé en revue les 24 questions de Geoffrey sur le prompt généré / la base de connaissance, réponses point par point (état actuel vs projection). Bloc copier-coller fourni à Geoffrey.
 - Constat icebreaker (`firstMessageTemplate.ts`, V1.3) DÉJÀ avancé : sortie JSON `{message, accroche, profil_insuffisant}`, parsing défensif (strip balises + try/catch, repli brut) dans le modal de test, chargement d'un vrai profil via Unipile (`scrapeLinkedInProfile`), mode diagnostic/proposition_directe porté par `structureMessage`, blocs optionnels qui disparaissent proprement, contrôle de longueur, lien objectif déjà facultatif.
@@ -16,6 +32,25 @@ Pour la vue d'ensemble par phases, voir [ROADMAP.md](./ROADMAP.md).
 - Point ouvert : confirmer avec Geoffrey que les questions historique / JSON 5 champs / plafond / qualif / "êtes-vous une IA" / problème+preuves visaient bien l'agent de conversation.
 - Décision à trancher (Q20 versionnage) : prompt figé à la création aujourd'hui, mais `knowledge_base` stocké → régénération possible. Reco = recompilation à la volée depuis `knowledge_base` à terme (cohérent compilateur de config).
 - Quick wins UI identifiés (à planifier) : vouvoiement + style sobre par défaut, réaccentuer le texte des prompts (ASCII volontaire, pas un bug d'encodage), renommer "Générer le prompt" → "Créer l'agent", remplacer "business" par "entreprise". Import site/doc pour pré-remplir (Q24) = nouveau chantier à part.
+
+### Build du méta-prompt conversation Mode B (Lots 1 à 3, dashboard)
+- Décision actée : la version de référence consolidée Mode B est LA version à câbler. Bandeau de statut de [docs/meta-prompt-conversation-geoffrey.md](./docs/meta-prompt-conversation-geoffrey.md) passé de "pas verrouillé, ne pas câbler" à "validée pour build, pas encore verrouillée".
+- Décisions de design : `structureMessage` NON stocké (injecté au runtime par n8n, sinon déduit de l'historique) ; `maxMessages` plafond dans le prompt ET compteur dur n8n (Option B, possédé par l'orchestration car traverse icebreaker+conversation) ; `qualificationCriteria` existant conservé et réinterprété comme "critères importants".
+- Lot 1 [promptTemplate.ts](./src/app/dashboard/agents/promptTemplate.ts) : `buildPromptContent` entièrement réécrit en Mode B (trajectoire CAS 1/CAS 2 pilotée par l'état du CTA, sortie JSON `message`/`etat`/`raison_handover`/`enjeu_detecte`/`cta_propose`, anti-enlisement, mise en cause IA, langue tolérante). Nouveaux champs `AgentFormData` : `iaDisclosure`, `maxMessages` (déf 4), `languageMode` (déf fr_tolerant). Blocs offre/preuves/objections/FAQ/prix/neverSay conditionnels.
+- Lot 2 [AgentWizard.tsx](./src/app/dashboard/agents/AgentWizard.tsx) : sélecteur Langue (étape 4), critères relabelisés "importants" + sélecteur plafond messages (3/4/5/6) + textarea divulgation IA (étape 5). Rétro-compat édition via `{...EMPTY_FORM, ...knowledge_base}`.
+- Lot 3 [TestAgentModal.tsx](./src/app/dashboard/agents/TestAgentModal.tsx) + [actions.ts](./src/app/dashboard/agents/actions.ts) : parsing JSON défensif (strip balises/préambule, isole le 1er objet, fallback texte brut), bulle = `message` + badge état/CTA, message vide (handover silencieux/clôture) en note système exclue de l'historique renvoyé au modèle. `max_tokens` 500 -> 700.
+- Validé `tsc --noEmit` OK.
+- Point ouvert (PROCHAINE ÉTAPE) : Lot 4 n8n guidé (pas SDK) sur le WF Conversation `fsSw8bIknV1cAgKx` — parsing JSON du retour Claude, règle "envoi ssi message non vide", routage `etat` (handover -> ai_enabled=false + raison, parker/clore -> stop relance), compteur dur `maxMessages`, injection runtime de `structureMessage`.
+- Point ouvert : les agents conversation déjà en base gardent leur ancien prompt tant qu'ils ne sont pas réédités-enregistrés (régénération Mode B à l'édition).
+- Précision n8n maxMessages (vérifié en base 29/06) : `maxMessages` est stocké DANS `lk_agents.knowledge_base` (JSON), PAS de colonne SQL dédiée (seules colonnes "max" en base : `daily_message_limit`, `response_delay_max_minutes`, sans rapport). Pour le compteur dur : n8n lit `knowledge_base ->> 'maxMessages'` (reco, pas de migration) OU on crée une colonne dédiée. Compte à comparer = `lk_prospects.message_count`, unique sur icebreaker + conversation.
+### Corrections rapport Geoffrey appliquées (dashboard, sans n8n) — FAITES
+- Décisions Nicolas tranchées : défauts de voix inversés sur LES DEUX types d'agent (conversation + prise de contact) ; preuve rendue obligatoire EN PLUS de l'objection (on garde l'objection obligatoire, "on fait ce que Geoffrey demande").
+- P0 [AgentWizard.tsx](./src/app/dashboard/agents/AgentWizard.tsx) : `problemSolved` ajouté à `step2Valid`, au moins une `proofPoints` ajoutée à `step3Valid` (objection toujours requise). Helper du champ Preuves durci (chiffré/vérifiable + exemple bonne vs mauvaise preuve).
+- P1 : défauts de voix inversés → vouvoiement + sobre dans `EMPTY_FORM` (promptTemplate.ts) ET `EMPTY_FIRST_MESSAGE_FORM` (firstMessageTemplate.ts). URL d'objectif rendue facultative (retirée de `step1Valid`, label "(optionnel)") ; le template Mode B gère déjà le cas sans lien.
+- P2 wording : "Nom de ton business" → "Nom de ton entreprise" ; bouton "Générer le prompt" → "Créer l'agent" pour les clients (canEditPrompt garde "Générer le prompt").
+- P2 réaccentuation : tous les libellés VISIBLES du wizard réaccentués (labels, helpers, placeholders, écrans génération/preview, boutons). Le texte INTERNE des prompts laissé en ASCII volontairement (caché au client, sans impact IA).
+- P2 style "capitales espacées" abandonné (demande Geoffrey) : `uppercase tracking-widest` retiré des 20 titres du dashboard sur 7 fichiers (agents AgentsClient/TestAgentModal/TestFirstMessageModal, Sidebar, settings, prospects, admin). Petites pastilles de statut `tracking-wider` ("Forfait", "Actif") conservées. Fait au `sed` après vérif, 0 occurrence résiduelle.
+- Rétro-compat : agents existants gardent leurs valeurs (spread `knowledge_base`), seuls les nouveaux prennent les nouveaux défauts. Aucune migration. Validé `tsc --noEmit` OK (exit 0). PAS committé (en attente feu vert + revue visuelle dans l'app du changement de titres, dashboard-wide).
 
 ## 2026-06-26 — Retour onboarding Karine (Geoffrey) + corrections agents
 

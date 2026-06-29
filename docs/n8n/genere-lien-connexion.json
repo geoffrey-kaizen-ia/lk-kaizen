@@ -1,0 +1,140 @@
+{
+  "name": "Génére lien de connexion",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "unipile-connect",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -336,
+        -48
+      ],
+      "id": "4c9cba94-42f2-498c-a474-42e06b8b95eb",
+      "name": "Webhook",
+      "webhookId": "97c32689-f10a-4f19-8070-6030ee4ff0b8"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        112,
+        -48
+      ],
+      "id": "4c5705f7-6a8e-4393-8913-fa8bf1545fec",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api22.unipile.com:15267/api/v1/hosted/accounts/link",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-KEY",
+              "value": "___REDACTED_UNIPILE_KEY___"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"type\": \"create\",\n  \"providers\": [\"LINKEDIN\"],\n  \"api_url\": \"https://api22.unipile.com:15267\",\n  \"expiresOn\": \"{{ $now.plus({ minutes: 30 }).toUTC().toISO() }}\",\n  \"name\": \"{{ $json.body.user_id }}\",\n  \"notify_url\": \"https://n8n.srv1213804.hstgr.cloud/webhook/unipile-notify\",\n\"success_redirect_url\": \"https://saas-kaizen.vercel.app/dashboard/agents?linkedin=ok\",\n\"failure_redirect_url\": \"https://saas-kaizen.vercel.app/dashboard/agents?linkedin=error\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -112,
+        -48
+      ],
+      "id": "875e59b1-b415-4280-82c5-95551ecc4f3e",
+      "name": "genere lien unipile",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000
+    }
+  ],
+  "pinData": {
+    "Webhook": [
+      {
+        "json": {
+          "headers": {
+            "host": "n8n.srv1213804.hstgr.cloud",
+            "user-agent": "curl/8.7.1",
+            "content-length": "39",
+            "accept": "*/*",
+            "content-type": "application/json",
+            "x-forwarded-for": "86.74.240.222",
+            "x-forwarded-host": "n8n.srv1213804.hstgr.cloud",
+            "x-forwarded-port": "443",
+            "x-forwarded-proto": "https",
+            "x-forwarded-server": "23460070732b",
+            "x-real-ip": "86.74.240.222",
+            "accept-encoding": "gzip"
+          },
+          "params": {},
+          "query": {},
+          "body": {
+            "account_id": "BY85po44SUyPqFR8pbrm0Q"
+          },
+          "webhookUrl": "https://n8n.srv1213804.hstgr.cloud/webhook/unipile-connect",
+          "executionMode": "production"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "genere lien unipile",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "genere lien unipile": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "errorWorkflow": "KpARxPgPgE2a5cue",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "versionId": "e11c37e3-54ac-45b0-a892-e78e1f472673",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "14e09279a0e20e70e8b0a269c2cfc5795ea69f614e7138110af3dec7e7956b68"
+  },
+  "id": "wtLJvVIhegJj8szS",
+  "tags": []
+}

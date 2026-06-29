@@ -206,11 +206,11 @@ export default function TestAgentModal({
         {/* Header */}
         <div className="flex items-center justify-between border-b border-border px-5 py-4">
           <div>
-            <h2 className="font-display text-base font-semibold uppercase tracking-widest text-foreground">
+            <h2 className="font-display text-base font-semibold text-foreground">
               Tester {agent.name ?? "l'agent"}
             </h2>
             <p className="mt-0.5 text-xs text-text-muted">
-              Simulation : rien n&apos;est enregistre, vos vrais prospects ne
+              Simulation : rien n&apos;est enregistre, tes vrais prospects ne
               sont pas affectes.
             </p>
           </div>
@@ -225,7 +225,7 @@ export default function TestAgentModal({
 
         {/* Profil prospect simule */}
         <details className="border-b border-border px-5 py-3">
-          <summary className="cursor-pointer font-display text-xs uppercase tracking-widest text-text-muted hover:text-foreground">
+          <summary className="cursor-pointer font-display text-xs text-text-muted hover:text-foreground">
             Profil du prospect simule (optionnel)
           </summary>
           <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -270,7 +270,7 @@ export default function TestAgentModal({
           {messages.length === 0 && (
             <p className="py-8 text-center text-sm text-text-muted">
               Ecris un message comme si tu etais le prospect, l&apos;agent te
-              repondra avec son prompt actuel.
+              repondra comme il le ferait en vrai.
             </p>
           )}
           <div className="space-y-2">

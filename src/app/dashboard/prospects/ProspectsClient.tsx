@@ -385,7 +385,7 @@ export default function ProspectsClient({
       {/* ── Campagnes ──────────────────────────────────────────────────── */}
       <section>
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="font-display text-sm font-semibold uppercase tracking-widest text-text-muted">
+          <h2 className="font-display text-sm font-semibold text-text-muted">
             Campagnes
           </h2>
           <div className="flex items-center gap-2">
@@ -496,7 +496,7 @@ export default function ProspectsClient({
             <svg className={`h-3.5 w-3.5 text-text-dim transition-transform ${openArchived ? "rotate-90" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
             </svg>
-            <h2 className="font-display text-sm font-semibold uppercase tracking-widest text-text-dim group-hover:text-text-muted">
+            <h2 className="font-display text-sm font-semibold text-text-dim group-hover:text-text-muted">
               Archives ({campaigns.filter((c) => c.status === "archived").length})
             </h2>
           </button>
@@ -553,7 +553,7 @@ export default function ProspectsClient({
                 <svg className={`h-3.5 w-3.5 text-text-dim transition-transform ${openQueue ? "rotate-90" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                 </svg>
-                <h2 className="font-display text-sm font-semibold uppercase tracking-widest text-text-muted group-hover:text-foreground">
+                <h2 className="font-display text-sm font-semibold text-text-muted group-hover:text-foreground">
                   File d&apos;attente ({visibleSelected.length})
                 </h2>
               </button>
@@ -629,7 +629,7 @@ export default function ProspectsClient({
                 <svg className={`h-3.5 w-3.5 text-text-dim transition-transform ${openPending ? "rotate-90" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                 </svg>
-                <h2 className="font-display text-sm font-semibold uppercase tracking-widest text-text-muted group-hover:text-foreground">
+                <h2 className="font-display text-sm font-semibold text-text-muted group-hover:text-foreground">
                   À valider ({visiblePending.length})
                 </h2>
               </button>
@@ -750,7 +750,7 @@ export default function ProspectsClient({
               <svg className={`h-3.5 w-3.5 text-text-dim transition-transform ${openInvited ? "rotate-90" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
               </svg>
-              <h2 className="font-display text-sm font-semibold uppercase tracking-widest text-text-muted group-hover:text-foreground">
+              <h2 className="font-display text-sm font-semibold text-text-muted group-hover:text-foreground">
                 Dernières invitations ({invitedResults.length})
               </h2>
             </button>
@@ -918,7 +918,7 @@ export default function ProspectsClient({
                     </div>
                   )}
                   <div className="flex justify-between gap-4">
-                    <span className="shrink-0 text-text-dim">Objectif</span>
+                    <span className="shrink-0 text-text-dim">Profils à cibler</span>
                     <span className="font-medium text-foreground">{c.target_count} profils</span>
                   </div>
                   <div className="flex justify-between gap-4">
@@ -1055,7 +1055,7 @@ export default function ProspectsClient({
                   </div>
                 </div>
                 <div>
-                  <label className="mb-1.5 block text-xs font-medium text-text-muted">Objectif (profils)</label>
+                  <label className="mb-1.5 block text-xs font-medium text-text-muted">Nombre de profils à cibler</label>
                   <input type="number" name="target_count" min={1} max={5000} defaultValue={prefillData?.target_count ?? 500} className="w-full rounded-md border border-border bg-panel-raised px-3 py-2 text-sm text-foreground outline-none focus:border-accent/50" />
                 </div>
               </div>

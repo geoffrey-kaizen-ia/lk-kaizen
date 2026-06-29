@@ -1,0 +1,1235 @@
+{
+  "name": "Cron - Envoi invitations quotidien",
+  "nodes": [
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "is-send-invitations",
+              "leftValue": "={{ $json.body.action }}",
+              "rightValue": "send_invitations",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "61e9c0fc-3137-428f-a70e-89f02b58023b",
+      "name": "Quelle action ?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -1456,
+        976
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Branche \"recherche\" : construit cfg attendu par le node d'Anthony \"Resolve location & build payload\"\n// Le webhook recoit : { account_id, campaign_id, keywords, location, network_distance, max_results, auto_invite }\n\nfunction uuidv4() {\n  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {\n    const r = Math.random() * 16 | 0;\n    const v = c === 'x' ? r : (r & 0x3 | 0x8);\n    return v.toString(16);\n  });\n}\n\nconst body = $input.first().json.body;\n\nconst {\n  account_id,\n  campaign_id,\n  keywords,\n  location,\n  network_distance,\n  max_results,\n  auto_invite,\n  industry,\n  exclude_industry,\n  exclude_titles,\n} = body;\n\nif (!account_id) throw new Error('account_id manquant dans la requete.');\nif (!keywords) throw new Error('keywords manquant dans la requete.');\n\nconst distanceLabels = {\n  '1': '1er degré',\n  '2': '2e degré',\n  '3': '3e degré et +',\n};\nconst nd = String(network_distance || '');\nconst search_network_distance = nd\n  ? nd.split(',').map(d => distanceLabels[d.trim()]).filter(Boolean)\n  : [];\n\nreturn [{\n  json: {\n    search_id: campaign_id || uuidv4(),\n    account_id,\n    auto_invite: auto_invite === true,\n    unipile_base_url: 'https://api22.unipile.com:15267',\n    unipile_account_id: account_id,\n    search_keywords: keywords,\n    search_location: location || '',\n    search_network_distance,\n    search_limit: Math.min(Math.max(Number(max_results) || 25, 1), 50),\n    search_industry: industry || '',\n    search_exclude_industry: exclude_industry || '',\n    search_exclude_titles: Array.isArray(exclude_titles) ? exclude_titles : [],\n  },\n}];\n"
+      },
+      "id": "d264dc3b-427b-4335-909a-627b774e75f5",
+      "name": "Init config recherche",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1232,
+        880
+      ]
+    },
+    {
+      "parameters": {
+        "tableId": "lk_search_results",
+        "dataToSend": "autoMapInputData"
+      },
+      "id": "a7a709cf-2997-4f10-92b3-07ac635e810b",
+      "name": "Supabase - Inserer resultats",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        336,
+        976
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": "mWip0WqnB57aANW3",
+          "name": "Supabase account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "is-auto-invite",
+              "leftValue": "={{ $('Init config recherche').item.json.auto_invite }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "76fad4df-b2b3-4f17-8f77-69dcf88b8d0e",
+      "name": "Auto invite ?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        560,
+        976
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Init config recherche').item.json.unipile_base_url }}/api/v1/users/invite",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ account_id: $('Init config recherche').item.json.account_id, provider_id: $json.provider_id }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "6a02ca9a-d25e-4ccc-82bd-4b76229ae864",
+      "name": "Envoyer invitation (auto)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1296,
+        992
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "mNQkc2EST14d7fGl",
+          "name": "Unipile API - LinkedIn"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "lk_search_results",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "account_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Loop Over Items').item.json.account_id }}"
+            },
+            {
+              "keyName": "provider_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Loop Over Items').item.json.provider_id }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "status",
+              "fieldValue": "invited"
+            },
+            {
+              "fieldId": "sent_at",
+              "fieldValue": "={{ $now }}"
+            }
+          ]
+        }
+      },
+      "id": "b2c0c4e0-beaa-4eac-b791-c5c7bcd56a4f",
+      "name": "Supabase - Marquer invite",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1504,
+        1056
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "mWip0WqnB57aANW3",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "Scrapping",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "e61828d5-68e2-4817-9fdc-a504d2a0e43c",
+      "name": "Webhook1",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -1680,
+        976
+      ],
+      "webhookId": "scrapping-webhook"
+    },
+    {
+      "parameters": {
+        "jsCode": "const UNIPILE_API_KEY = '___REDACTED_UNIPILE_KEY___';\n\n// cfg vient de Code - Compute hash (HTTP - Lire curseur est entre les deux)\nconst cfg = $('Code - Compute hash').item.json;\n\n// Curseur existant pour cette recherche ([] si nouvelle, [{...}] si déjà connue)\nconst curseurResponse = $input.first().json;\n// n8n peut retourner soit l'array soit l'item directement selon la réponse HTTP\nlet curseurRow = null;\nif (Array.isArray(curseurResponse) && curseurResponse.length > 0) {\n  curseurRow = curseurResponse[0];\n} else if (curseurResponse && curseurResponse.last_cursor !== undefined) {\n  curseurRow = curseurResponse;\n}\nconst last_cursor = curseurRow?.last_cursor || null;\nconst exhausted = curseurRow?.exhausted || false;\n\n\nconst {\n  unipile_base_url,\n  unipile_account_id,\n  search_keywords,\n  search_location,\n  search_network_distance,\n  search_limit,\n  search_industry,\n  search_exclude_titles,\n} = cfg;\n\nif (!unipile_account_id) {\n  throw new Error('unipile_account_id manquant.');\n}\n\nasync function resolveParameter(type, label) {\n  if (!label || !String(label).trim()) return null;\n  try {\n    const resp = await this.helpers.httpRequest({\n      method: 'GET',\n      url: `${unipile_base_url}/api/v1/linkedin/search/parameters`,\n      qs: {\n        type,\n        keywords: String(label).trim(),\n        account_id: unipile_account_id,\n        limit: 1,\n      },\n      headers: {\n        'X-API-KEY': UNIPILE_API_KEY,\n        'accept': 'application/json',\n      },\n      json: true,\n    });\n    const items = resp?.items || [];\n    if (items.length > 0) {\n      return { id: String(items[0].id), title: items[0].title || null };\n    }\n    return null;\n  } catch (err) {\n    console.log(`AVERTISSEMENT : resolve ${type} \"${label}\" a echoue : ${err.message}. Filtre ignore.`);\n    return null;\n  }\n}\n\nconst distanceMap = {\n  '1er degré': 1,\n  '2e degré': 2,\n  '3e degré et +': 3,\n};\nconst network_distance = (Array.isArray(search_network_distance) ? search_network_distance : [])\n  .map(label => distanceMap[label])\n  .filter(n => Number.isInteger(n));\n\nconst locationResolved = await resolveParameter.call(this, 'LOCATION', search_location);\nconst location_ids = locationResolved ? [locationResolved.id] : [];\nconst location_resolved_title = locationResolved ? locationResolved.title : null;\n\nconst includeIndustry = await resolveParameter.call(this, 'INDUSTRY', search_industry);\n\nconst excludeTitles = (Array.isArray(search_exclude_titles) ? search_exclude_titles : [])\n  .map(t => String(t).trim())\n  .filter(t => t.length > 0);\n\nconst searchBody = {\n  api: 'classic',\n  category: 'people',\n  keywords: search_keywords,\n};\nif (network_distance.length > 0) searchBody.network_distance = network_distance;\nif (location_ids.length > 0) searchBody.location = location_ids;\nif (includeIndustry) {\n  searchBody.industry = [includeIndustry.id];\n}\nif (last_cursor) searchBody.cursor = last_cursor;\n\nreturn [{\n  json: {\n    ...cfg,\n    search_payload: searchBody,\n    location_ids,\n    location_resolved_title,\n    include_industry_id: includeIndustry ? includeIndustry.id : null,\n    include_industry_title: includeIndustry ? includeIndustry.title : null,\n    network_distance_codes: network_distance,\n    exclude_titles: excludeTitles,\n    search_started_at: new Date().toISOString(),\n    last_cursor,\n    exhausted,\n  },\n}];\n"
+      },
+      "id": "b5133dc7-5646-410a-8cda-664900b395b5",
+      "name": "Resolve location & build payload1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -336,
+        880
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.unipile_base_url }}/api/v1/linkedin/search",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "account_id",
+              "value": "={{ $json.unipile_account_id }}"
+            },
+            {
+              "name": "limit",
+              "value": "={{ $json.search_limit }}"
+            },
+            {
+              "name": "cursor",
+              "value": "={{ $json.last_cursor }}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.search_payload) }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "0b7bf21f-7927-4782-9ff0-0541135d2955",
+      "name": "Search profiles (Unipile)1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -112,
+        880
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "mNQkc2EST14d7fGl",
+          "name": "Unipile API - LinkedIn"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Recoit la reponse de /linkedin/search (classic/people).\n// Format reel : { object, items: [...], paging, cursor }.\n// Champs reels par profil : id, name, headline, location, network_distance, etc.\n// IMPORTANT : \"industry\" est toujours null sur cette API, et il n'y a aucun champ\n// entreprise. On extrait l'entreprise du headline en best-effort.\n// Post-filtre les titres a eviter (sur le headline) avant d'ecrire dans lk_search_results.\n\nconst response = $input.first().json;\nconst profiles = Array.isArray(response?.items)\n  ? response.items\n  : (Array.isArray(response?.data) ? response.data : []);\n\nconst ctx = $items('Resolve location & build payload1')[0].json;\n\n// Titres a eviter (post-filtrage, car classic/people ne sait pas exclure de titre)\nconst excludeTitles = (Array.isArray(ctx.exclude_titles) ? ctx.exclude_titles : [])\n  .map(t => String(t).trim().toLowerCase())\n  .filter(t => t.length > 0);\n\n// Extrait l'entreprise du headline en best-effort : \"... chez X\", \"... at X\", \"... @ X\".\n// Coupe aux separateurs courants car le headline melange souvent poste, boite et specialites.\nfunction extractCompany(headline) {\n  if (!headline) return '';\n  const m = String(headline).match(/\\b(?:chez|at|@)\\s+(.+)$/i);\n  if (!m) return '';\n  return m[1].split(/[,|·]| - | – /)[0].trim();\n}\n\n// Post-filtrage des titres a eviter\nconst filtered = profiles.filter(p => {\n    if (p.network_distance === 'DISTANCE_1') return false; // jamais de 1er degre (deja connecte)\n\n  const headline = String(p.headline || '').toLowerCase();\n  if (excludeTitles.length > 0 && excludeTitles.some(t => headline.includes(t))) {\n    return false;\n  }\n  return true;\n});\n\nconst rows = filtered.map(p => {\n  const fullName = (p.name || '').trim();\n  const headline = p.headline || '';\n  const locationLinkedin = p.location || '';\n\n  // industry : non fourni par classic/people (toujours null cote Unipile).\n  const industry = p.industry || null;\n  // current_company : aucun champ dedie, on derive du headline.\n  const currentCompany = extractCompany(headline) || null;\n\n  return {\n    json: {\n      account_id: ctx.account_id,\n      search_id: ctx.search_id,\n      provider_id: p.id || '',\n      full_name: fullName,\n      headline,\n      location: locationLinkedin,\n      industry,\n      current_company: currentCompany,\n      status: ctx.auto_invite ? 'selected' : 'pending',\n    },\n  };\n});\n\nreturn rows;\n"
+      },
+      "id": "f1376282-2c8c-477b-b87f-20d2941a9a94",
+      "name": "Flatten + metadata1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        112,
+        976
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://omwmbqpbwprpaqaphphg.supabase.co/rest/v1/lk_searches",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "account_id",
+              "value": "=eq.{{ $json.account_id }}"
+            },
+            {
+              "name": "query_hash",
+              "value": "=eq.{{ $json.query_hash }}"
+            },
+            {
+              "name": "select",
+              "value": "id,last_cursor,exhausted"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "___REDACTED_JWT___"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer ___REDACTED_JWT___"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -784,
+        880
+      ],
+      "id": "883f0ca4-00c2-4e21-b61a-dfaf7d24e60f",
+      "name": "HTTP - Lire curseur\t",
+      "alwaysOutputData": true,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "rcHmAlDZZaeaFZku",
+          "name": "Supabase Kaizen"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Hash djb2 en pur JS — pas besoin de module crypto\nfunction hashString(str) {\n  let hash = 5381;\n  for (let i = 0; i < str.length; i++) {\n    hash = ((hash << 5) + hash) ^ str.charCodeAt(i);\n    hash = hash >>> 0; // force unsigned 32bit\n  }\n  return hash.toString(16).padStart(8, '0');\n}\n\nconst cfg = $input.first().json;\n\nconst normalized = {\n  keywords: (cfg.search_keywords || '').toLowerCase().trim(),\n  location: (cfg.search_location || '').toLowerCase().trim(),\n  network: [...(cfg.search_network_distance || [])].sort().join(','),\n  industry: (cfg.search_industry || '').toLowerCase().trim(),\n};\n\nconst raw = JSON.stringify(normalized);\nconst query_hash = hashString(raw);\n\nreturn [{ json: { ...cfg, query_hash } }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1008,
+        880
+      ],
+      "id": "b7772c93-04d9-4427-8735-560a97978fa3",
+      "name": "Code - Compute hash"
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "=https://omwmbqpbwprpaqaphphg.supabase.co/rest/v1/lk_searches?id=eq.{{ $('Init config recherche').item.json.search_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "___REDACTED_JWT___"
+            },
+            {
+              "name": "Content-type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=representation"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer ___REDACTED_JWT___"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "account_id",
+              "value": "={{ $('Code - Compute hash').item.json.account_id }}"
+            },
+            {
+              "name": "query_hash",
+              "value": "={{ $('Code - Compute hash').item.json.query_hash }}"
+            },
+            {
+              "name": "query_params",
+              "value": "={{ JSON.stringify($('Code - Compute hash').item.json) }}"
+            },
+            {
+              "name": "last_cursor",
+              "value": "={{ $json.cursor || null }}"
+            },
+            {
+              "name": "last_run_at",
+              "value": "={{ new Date().toISOString() }}"
+            },
+            {
+              "name": "exhausted",
+              "value": "={{ $json.paging.page_count === 0 }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        112,
+        784
+      ],
+      "id": "066825c8-f3b1-409e-9a13-f97213b510fe",
+      "name": "HTTP - Upsert lk_searches",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "rcHmAlDZZaeaFZku",
+          "name": "Supabase Kaizen"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "aa6741bb-6978-4ebd-939d-1943b9c09b8e",
+              "leftValue": "={{ $json.exhausted }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -560,
+        880
+      ],
+      "id": "26b40275-2446-4b16-aab3-10ec0bdbfcff",
+      "name": "Recherche épuisée"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{ \"exhausted\": true }",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        -336,
+        688
+      ],
+      "id": "6acb2b51-b82c-40f5-9176-06ea3f129dbe",
+      "name": "Réponse - Recherche épuisée"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{ \"exhausted\": false }",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        -336,
+        1072
+      ],
+      "id": "f4fad058-7eda-497e-ade9-84f88d68e703",
+      "name": "Réponse"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{ \"ok\": true }",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        -1232,
+        1072
+      ],
+      "id": "b59b7674-6ced-4719-b0e0-ed0a73f36da5",
+      "name": "Réponse1"
+    },
+    {
+      "parameters": {
+        "url": "https://omwmbqpbwprpaqaphphg.supabase.co/rest/v1/lk_clients_config",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "is_active",
+              "value": "eq.true"
+            },
+            {
+              "name": "select",
+              "value": "account_id,daily_invite_limit,active_hours_start,active_hours_end,active_days,timezone"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            },
+            {
+              "name": "apikey",
+              "value": "___REDACTED_JWT___"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer ___REDACTED_JWT___"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "dd70cfa3-b07c-43c0-9a44-b3c5847cbe27",
+      "name": "HTTP - Lire clients actifs",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -1456,
+        1408
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "rcHmAlDZZaeaFZku",
+          "name": "Supabase Kaizen"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================================\n// Build send list : pour chaque client actif dans son creneau,\n// calcule le quota restant et renvoie la file a envoyer.\n// ============================================================\nconst SUPABASE_URL = 'https://omwmbqpbwprpaqaphphg.supabase.co';\nconst SUPABASE_KEY = '___REDACTED_JWT___';\n\n// n8n peut retourner les clients soit en 1 item (tableau JSON entier)\n// soit en N items separes (un par client). On gere les deux cas.\nconst allItems = $input.all();\nlet clientList = [];\nif (allItems.length === 1 && Array.isArray(allItems[0].json)) {\n  clientList = allItems[0].json;\n} else {\n  clientList = allItems.map(item => item.json);\n}\n\nconsole.log('[Build send list] ' + clientList.length + ' client(s) recus');\n\nconst now = new Date();\nconst todayStart = new Date(Date.UTC(\n  now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()\n)).toISOString();\n\nconst sendList = [];\n\nfor (const client of clientList) {\n  const {\n    account_id,\n    daily_invite_limit = 25,\n    active_hours_start = 9,\n    active_hours_end = 19,\n    active_days = [1,2,3,4,5],\n    timezone = 'Europe/Paris',\n  } = client;\n\n  if (!account_id) { console.log('[Build send list] client sans account_id, skip'); continue; }\n\n  // Verifier le creneau actif (heure + jour) dans le fuseau du client\n  const nowInTz = new Date().toLocaleString('en-US', { timeZone: timezone });\n  const dtInTz = new Date(nowInTz);\n  const hour = dtInTz.getHours();\n  const jsDay = dtInTz.getDay();\n  const isoDay = jsDay === 0 ? 7 : jsDay;\n\n  console.log('[Build send list] ' + account_id + ' : heure=' + hour + ', jourISO=' + isoDay);\n\n  if (hour < active_hours_start || hour >= active_hours_end) {\n    console.log('[Build send list] ' + account_id + ' hors creneau horaire, skip');\n    continue;\n  }\n  if (!active_days.includes(isoDay)) {\n    console.log('[Build send list] ' + account_id + ' hors jours actifs, skip');\n    continue;\n  }\n\n  // Compter les invitations deja envoyees aujourd'hui\n  let sentToday = 0;\n  try {\n    const sentResp = await this.helpers.httpRequest({\n      method: 'GET',\n      url: SUPABASE_URL + '/rest/v1/lk_search_results',\n      qs: {\n        account_id: 'eq.' + account_id,\n        status: 'eq.invited',\n        sent_at: 'gte.' + todayStart,\n        select: 'id',\n      },\n      headers: {\n        apikey: SUPABASE_KEY,\n        Authorization: 'Bearer ' + SUPABASE_KEY,\n      },\n      json: true,\n    });\n    sentToday = Array.isArray(sentResp) ? sentResp.length : 0;\n    console.log('[Build send list] ' + account_id + ' : ' + sentToday + ' invite(s) aujourd\\'hui');\n  } catch(e) {\n    console.log('[Build send list] Erreur count envois ' + account_id + ': ' + e.message);\n  }\n\n  const quotaRestant = Math.max(0, daily_invite_limit - sentToday);\n  console.log('[Build send list] ' + account_id + ' : quota restant = ' + quotaRestant);\n  if (quotaRestant === 0) { continue; }\n\n  // Lire la file d'attente (selected, les plus anciens en premier)\n  let queue = [];\n  try {\n    queue = await this.helpers.httpRequest({\n      method: 'GET',\n      url: SUPABASE_URL + '/rest/v1/lk_search_results',\n      qs: {\n        account_id: 'eq.' + account_id,\n        status: 'eq.selected',\n        order: 'created_at.asc',\n        limit: String(quotaRestant),\n        select: 'id,provider_id,full_name,headline',\n      },\n      headers: {\n        apikey: SUPABASE_KEY,\n        Authorization: 'Bearer ' + SUPABASE_KEY,\n      },\n      json: true,\n    });\n    console.log('[Build send list] ' + account_id + ' : ' + (Array.isArray(queue) ? queue.length : 0) + ' profil(s) selected');\n  } catch(e) {\n    console.log('[Build send list] Erreur lecture file ' + account_id + ': ' + e.message);\n  }\n\n  for (const profile of (Array.isArray(queue) ? queue : [])) {\n    sendList.push({\n      json: {\n        account_id,\n        result_id: profile.id,\n        provider_id: profile.provider_id,\n        full_name: profile.full_name || null,\n        headline: profile.headline || null,\n      },\n    });\n  }\n}\n\nconsole.log('[Build send list] Total a envoyer : ' + sendList.length);\nreturn sendList.length > 0 ? sendList : [{ json: { __empty: true } }];\n"
+      },
+      "id": "5df9d41b-e912-48a6-9c68-b0d7daa055a9",
+      "name": "Code - Build send list",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1232,
+        1408
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "check-not-empty",
+              "leftValue": "={{ $json.__empty }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "44c12a75-b1c8-4fe3-893f-440b2369104f",
+      "name": "If - File non vide",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -1008,
+        1408
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// ============================================================\n// Envoyer et traiter : pour chaque profil de la file,\n// envoie l'invitation Unipile puis met a jour Supabase.\n// Mode runOnceForEachItem : retourner { json: {...} } (pas de tableau).\n// ============================================================\nconst SUPABASE_URL = 'https://omwmbqpbwprpaqaphphg.supabase.co';\nconst SUPABASE_KEY = '___REDACTED_JWT___';\nconst UNIPILE_BASE_URL = 'https://api22.unipile.com:15267';\nconst UNIPILE_API_KEY = '___REDACTED_UNIPILE_KEY___';\n\nconst { account_id, result_id, provider_id, full_name, headline } = $json;\n\n// 1. Envoyer l'invitation Unipile (sans message)\nlet inviteResult = null;\nlet errorType = null;\n\ntry {\n  inviteResult = await this.helpers.httpRequest({\n    method: 'POST',\n    url: UNIPILE_BASE_URL + '/api/v1/users/invite',\n    headers: {\n      'X-API-KEY': UNIPILE_API_KEY,\n      'accept': 'application/json',\n    },\n    body: { account_id, provider_id },\n    json: true,\n  });\n} catch (err) {\n  const body = err.response?.body;\n  const parsed = (typeof body === 'string') ? JSON.parse(body || '{}') : (body || {});\n  errorType = parsed?.error?.type || 'unknown_error';\n  console.log('Erreur Unipile ' + provider_id + ': ' + errorType);\n}\n\nconst success = inviteResult?.object === 'UserInvitationSent';\n\nconst IGNOREABLE = [\n  'errors/already_connected',\n  'errors/already_invited_recently',\n  'errors/user_unreachable',\n  'errors/blocked_recipient',\n  'errors/cannot_invite_attendee',\n];\n\nconst newStatus = success\n  ? 'invited'\n  : (IGNOREABLE.includes(errorType) ? 'ignored' : 'failed');\n\n// 2. Mettre a jour lk_search_results\nconst updatePayload = { status: newStatus };\nif (errorType) updatePayload.error_code = errorType;\nif (success) updatePayload.sent_at = new Date().toISOString();\n\ntry {\n  await this.helpers.httpRequest({\n    method: 'PATCH',\n    url: SUPABASE_URL + '/rest/v1/lk_search_results',\n    qs: { id: 'eq.' + result_id },\n    headers: {\n      apikey: SUPABASE_KEY,\n      Authorization: 'Bearer ' + SUPABASE_KEY,\n      'Content-Type': 'application/json',\n      Prefer: 'return=minimal',\n    },\n    body: JSON.stringify(updatePayload),\n  });\n} catch (e) {\n  console.log('Erreur MAJ lk_search_results: ' + e.message);\n}\n\n// 3. Creer le prospect dans lk_prospects si succes\nif (success) {\n  try {\n    await this.helpers.httpRequest({\n      method: 'POST',\n      url: SUPABASE_URL + '/rest/v1/lk_prospects',\n      headers: {\n        apikey: SUPABASE_KEY,\n        Authorization: 'Bearer ' + SUPABASE_KEY,\n        'Content-Type': 'application/json',\n        Prefer: 'return=minimal',\n      },\n      body: JSON.stringify({\n        account_id: account_id,\n        linkedin_id: provider_id,\n        full_name: full_name || '',\n        job_title: headline || '',\n        status: 'invited',\n      }),\n    });\n  } catch (e) {\n    console.log('Prospect deja existant ou erreur insertion: ' + e.message);\n  }\n}\n\n// runOnceForEachItem : retourner un objet simple, pas un tableau\nreturn {\n  json: {\n    account_id: account_id || null,\n    provider_id: provider_id || null,\n    result: newStatus,\n    error_type: errorType || null,\n  },\n};\n"
+      },
+      "id": "c1ef1694-0935-470d-a6e3-89510effd9d6",
+      "name": "Code - Envoyer et traiter",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -240,
+        1472
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 10
+            }
+          ]
+        }
+      },
+      "id": "fce3779a-b4be-43b9-93df-6008579ed486",
+      "name": "Schedule - Scraping quotidien",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -1680,
+        1776
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://omwmbqpbwprpaqaphphg.supabase.co/rest/v1/lk_searches",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "status",
+              "value": "eq.active"
+            },
+            {
+              "name": "select",
+              "value": "id,account_id,query_params,last_cursor,total_scraped,target_count,mode"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "___REDACTED_JWT___"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer ___REDACTED_JWT___"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "e1cf232f-8a85-49c2-9461-46e5b83fcaf8",
+      "name": "HTTP - Lire campagnes actives",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1456,
+        1776
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const SUPABASE_URL = 'https://omwmbqpbwprpaqaphphg.supabase.co';\nconst SUPABASE_KEY = '___REDACTED_JWT___';\n\nconst allItems = $input.all();\nlet campaigns = [];\nif (allItems.length === 1 && Array.isArray(allItems[0].json)) {\n  campaigns = allItems[0].json;\n} else {\n  campaigns = allItems.map(i => i.json);\n}\n\nconst result = [];\nfor (const c of campaigns) {\n  if (!c.id || !c.account_id) continue;\n  const target = c.target_count || 500;\n\n  // Option A : on recompte les vraies lignes en base (source de verite),\n  // au lieu de faire confiance au compteur stocke total_scraped.\n  let already = 0;\n  try {\n    const resp = await this.helpers.httpRequest({\n      method: 'GET',\n      url: SUPABASE_URL + '/rest/v1/lk_search_results',\n      qs: { search_id: 'eq.' + c.id, select: 'id' },\n      headers: {\n        apikey: SUPABASE_KEY,\n        Authorization: 'Bearer ' + SUPABASE_KEY,\n        Prefer: 'count=exact',\n        Range: '0-0',\n        accept: 'application/json',\n      },\n      returnFullResponse: true,\n      json: true,\n    });\n    const cr = resp.headers?.['content-range'] || '';\n    already = Number(String(cr).split('/')[1]) || 0;\n  } catch (err) {\n    console.log('[Init scraping] count erreur ' + c.id + ' : ' + err.message);\n    already = c.total_scraped || 0; // repli sur le compteur stocke\n  }\n\n  // Objectif deja atteint -> on saute, et on marque la campagne done.\n  if (already >= target) {\n    try {\n      await this.helpers.httpRequest({\n        method: 'PATCH',\n        url: SUPABASE_URL + '/rest/v1/lk_searches',\n        qs: { id: 'eq.' + c.id },\n        headers: {\n          apikey: SUPABASE_KEY,\n          Authorization: 'Bearer ' + SUPABASE_KEY,\n          'Content-Type': 'application/json',\n          Prefer: 'return=minimal',\n        },\n        body: JSON.stringify({ status: 'done', total_scraped: already, last_run_at: new Date().toISOString() }),\n      });\n    } catch (err) {\n      console.log('[Init scraping] MAJ done erreur ' + c.id + ' : ' + err.message);\n    }\n    continue;\n  }\n\n  const qp = c.query_params || {};\n  const distanceLabels = { '1': '1er degré', '2': '2e degré', '3': '3e degré et +' };\n  const nd = String(qp.network_distance || '');\n  const search_network_distance = nd ? nd.split(',').map(d => distanceLabels[d.trim()]).filter(Boolean) : [];\n\n  result.push({ json: {\n    campaign_id: c.id,\n    account_id: c.account_id,\n    search_keywords: qp.keywords || '',\n    search_location: qp.location || '',\n    search_network_distance,\n    search_industry: qp.industry || '',\n    search_exclude_titles: Array.isArray(qp.exclude_titles) ? qp.exclude_titles : [],\n    last_cursor: c.last_cursor || null,\n    already,\n    remaining: target - already,\n    target_count: target,\n    mode: c.mode || 'validation',\n  }});\n}\n\nconsole.log('[Init scraping] ' + result.length + ' campagne(s) a scraper');\nif (result.length === 0) return [{ json: { __empty: true } }];\nreturn result;\n"
+      },
+      "id": "e97322fe-6052-4da5-b7c1-5d40f130fc36",
+      "name": "Code - Init scraping par campagne",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1232,
+        1776
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "check-campaign-id",
+              "leftValue": "={{ $json.campaign_id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "eac03d9a-ef96-4bc2-b623-477cfd94e7f0",
+      "name": "IF - Campagnes a scraper",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -1008,
+        1776
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const UNIPILE_API_KEY = '___REDACTED_UNIPILE_KEY___';\nconst UNIPILE_BASE_URL = 'https://api22.unipile.com:15267';\n\nconst cfg = $json;\nconst {\n  campaign_id, account_id,\n  search_keywords, search_location, search_network_distance,\n  search_industry, search_exclude_titles,\n  last_cursor, already, remaining, target_count, mode,\n} = cfg;\n\nasync function resolveParam(type, label) {\n  if (!label || !String(label).trim()) return null;\n  try {\n    const resp = await this.helpers.httpRequest({\n      method: 'GET',\n      url: UNIPILE_BASE_URL + '/api/v1/linkedin/search/parameters',\n      qs: { type, keywords: String(label).trim(), account_id, limit: 1 },\n      headers: { 'X-API-KEY': UNIPILE_API_KEY, accept: 'application/json' },\n      json: true,\n    });\n    const items = resp?.items || [];\n    return items.length > 0 ? { id: String(items[0].id) } : null;\n  } catch { return null; }\n}\n\nconst distanceMap = { '1er degré': 1, '2e degré': 2, '3e degré et +': 3 };\nconst network_distance = (search_network_distance || [])\n  .map(l => distanceMap[l]).filter(n => Number.isInteger(n));\n\nconst locationR = await resolveParam.call(this, 'LOCATION', search_location);\nconst industryR  = await resolveParam.call(this, 'INDUSTRY', search_industry);\n\nconst searchBody = { api: 'classic', category: 'people', keywords: search_keywords };\nif (network_distance.length > 0) searchBody.network_distance = network_distance;\nif (locationR) searchBody.location = [locationR.id];\nif (industryR) searchBody.industry = [industryR.id];\nif (last_cursor) searchBody.cursor = last_cursor;\n\n// Option A : on ne demande que ce qui manque (max 50 par page).\nconst pageLimit = Math.min(50, Math.max(Number(remaining) || 0, 1));\n\nlet searchResp;\ntry {\n  searchResp = await this.helpers.httpRequest({\n    method: 'POST',\n    url: UNIPILE_BASE_URL + '/api/v1/linkedin/search',\n    qs: { account_id, limit: String(pageLimit) },\n    headers: {\n      'X-API-KEY': UNIPILE_API_KEY,\n      accept: 'application/json',\n      'content-type': 'application/json',\n    },\n    body: JSON.stringify(searchBody),\n  });\n} catch (err) {\n  console.log('[Scrape] Erreur Unipile campaign ' + campaign_id + ': ' + err.message);\n  return { json: { campaign_id, account_id, cursor_next: last_cursor, total_scraped_new: already, status_new: 'active', profiles: [] } };\n}\n\nconst profiles_raw = Array.isArray(searchResp?.items) ? searchResp.items : [];\nconst cursor_next = searchResp?.cursor || null;\nconst exhausted = !cursor_next;\n\nconst excludeTitles = (search_exclude_titles || [])\n  .map(t => String(t).trim().toLowerCase()).filter(t => t.length > 0);\n\nfunction extractCompany(headline) {\n  if (!headline) return null;\n  const m = String(headline).match(/\\b(?:chez|at|@)\\s+(.+)$/i);\n  if (!m) return null;\n  return m[1].split(/[,|·]| - | – /)[0].trim();\n}\n\nlet profiles = profiles_raw\n  .filter(p => {\n    if (p.network_distance === 'DISTANCE_1') return false; // jamais de 1er degre (deja connecte)\n    const h = String(p.headline || '').toLowerCase();\n    return excludeTitles.length === 0 || !excludeTitles.some(t => h.includes(t));\n  })\n  .map(p => ({\n    account_id,\n    search_id: campaign_id,\n    provider_id: p.id || '',\n    full_name: (p.name || '').trim(),\n    headline: p.headline || '',\n    location: p.location || '',\n    industry: p.industry || null,\n    current_company: extractCompany(p.headline) || null,\n    status: mode === 'auto' ? 'selected' : 'pending',\n  }));\n\n// Garde-fou : ne jamais depasser l'objectif sur la derniere page,\n// meme si Unipile renvoie une page pleine malgre le limit.\nif (profiles.length > remaining) profiles = profiles.slice(0, remaining);\n\nconst total_new = profiles.length;\nconst total_scraped_new = (already || 0) + total_new;\nconst isDone = exhausted || total_scraped_new >= (target_count || 500);\n\nconsole.log('[Scrape] Campaign ' + campaign_id + ' : ' + total_new + ' profils, cursor=' + (cursor_next || 'null') + ', done=' + isDone);\n\nreturn { json: {\n  campaign_id, account_id,\n  cursor_next: isDone ? null : cursor_next,\n  total_scraped_new,\n  status_new: isDone ? 'done' : 'active',\n  profiles,\n} };\n"
+      },
+      "id": "a5e3bb7f-8e0d-47a9-adbe-fd88f1357eee",
+      "name": "Code - Resolve et Scrape Unipile",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -784,
+        1776
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const SUPABASE_URL = 'https://omwmbqpbwprpaqaphphg.supabase.co';\nconst SUPABASE_KEY = '___REDACTED_JWT___';\n\nconst { campaign_id, cursor_next, status_new, profiles } = $json;\n\n// 1) Insertion tolerante aux doublons : un doublon ne doit pas faire echouer tout le lot.\nif (profiles && profiles.length > 0) {\n  try {\n    await this.helpers.httpRequest({\n      method: 'POST',\n      url: SUPABASE_URL + '/rest/v1/lk_search_results',\n      qs: { on_conflict: 'account_id,provider_id' },\n      headers: {\n        apikey: SUPABASE_KEY,\n        Authorization: 'Bearer ' + SUPABASE_KEY,\n        'Content-Type': 'application/json',\n        Prefer: 'return=minimal,resolution=ignore-duplicates',\n      },\n      body: JSON.stringify(profiles),\n    });\n    console.log('[INSERT] ' + profiles.length + ' profils tentes (doublons ignores) campaign ' + campaign_id);\n  } catch (err) {\n    console.log('[INSERT] Erreur lk_search_results: ' + err.message);\n  }\n}\n\n// 2) Compteur recale sur les VRAIES lignes en base (source de verite).\nlet realCount = 0;\ntry {\n  const resp = await this.helpers.httpRequest({\n    method: 'GET',\n    url: SUPABASE_URL + '/rest/v1/lk_search_results',\n    qs: { search_id: 'eq.' + campaign_id, select: 'id' },\n    headers: {\n      apikey: SUPABASE_KEY,\n      Authorization: 'Bearer ' + SUPABASE_KEY,\n      Prefer: 'count=exact',\n      Range: '0-0',\n      accept: 'application/json',\n    },\n    returnFullResponse: true,\n    json: true,\n  });\n  const cr = resp.headers?.['content-range'] || '';\n  realCount = Number(String(cr).split('/')[1]) || 0;\n} catch (err) {\n  console.log('[COUNT] Erreur recompte: ' + err.message);\n}\n\n// 3) MAJ campagne avec le compteur reel.\ntry {\n  await this.helpers.httpRequest({\n    method: 'PATCH',\n    url: SUPABASE_URL + '/rest/v1/lk_searches',\n    qs: { id: 'eq.' + campaign_id },\n    headers: {\n      apikey: SUPABASE_KEY,\n      Authorization: 'Bearer ' + SUPABASE_KEY,\n      'Content-Type': 'application/json',\n      Prefer: 'return=minimal',\n    },\n    body: JSON.stringify({\n      last_cursor: cursor_next || null,\n      total_scraped: realCount,\n      status: status_new,\n      last_run_at: new Date().toISOString(),\n    }),\n  });\n  console.log('[MAJ] Campaign ' + campaign_id + ' : ' + status_new + ', total reel=' + realCount);\n} catch (err) {\n  console.log('[MAJ] Erreur lk_searches: ' + err.message);\n}\n\nreturn { json: { campaign_id, inserted: profiles?.length || 0, status_new, total_scraped: realCount } };\n"
+      },
+      "id": "d07554fb-32c8-49ef-98c2-8675a620d844",
+      "name": "Code - MAJ campagne et Inserer resultats",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -560,
+        1776
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 9
+            }
+          ]
+        }
+      },
+      "id": "45ac08ae-d9c1-436a-a776-6ec8dc18ec8e",
+      "name": "Schedule - 7h quotidien - Invitation",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -1680,
+        1408
+      ]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        784,
+        976
+      ],
+      "id": "19fa1570-06a2-4f6f-b8cb-3561eb769dfb",
+      "name": "Loop Over Items"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        -784,
+        1408
+      ],
+      "id": "095cd388-6a96-41de-8137-2bcad00b0ca8",
+      "name": "Loop Over Items1"
+    },
+    {
+      "parameters": {
+        "amount": "={{ Math.random() + 1 }}",
+        "unit": "minutes"
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        -496,
+        1472
+      ],
+      "id": "baf59817-fa45-400e-bb00-246db173dff4",
+      "name": "Wait",
+      "webhookId": "222b8f52-7b6a-4f35-9079-b4c1a9f95d14"
+    },
+    {
+      "parameters": {
+        "amount": "={{ Math.random() + 1 }}",
+        "unit": "minutes"
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1072,
+        992
+      ],
+      "id": "223b6c08-74e9-4bfd-a83f-a27d40fa1bbb",
+      "name": "Wait1",
+      "webhookId": "7d9b6a00-e9d4-4ea6-8123-4c9c50e8032a"
+    }
+  ],
+  "pinData": {
+    "Webhook1": [
+      {
+        "json": {
+          "headers": {
+            "host": "n8n.srv1213804.hstgr.cloud",
+            "user-agent": "node",
+            "content-length": "275",
+            "accept": "*/*",
+            "accept-encoding": "br, gzip, deflate",
+            "accept-language": "*",
+            "content-type": "application/json",
+            "sec-fetch-mode": "cors",
+            "x-forwarded-for": "86.74.240.222",
+            "x-forwarded-host": "n8n.srv1213804.hstgr.cloud",
+            "x-forwarded-port": "443",
+            "x-forwarded-proto": "https",
+            "x-forwarded-server": "23460070732b",
+            "x-real-ip": "86.74.240.222"
+          },
+          "params": {},
+          "query": {},
+          "body": {
+            "account_id": "rsZrC9jYS3am3poE-AZsMg",
+            "campaign_id": "915734fa-3510-46df-8e3f-eb93ded3d825",
+            "keywords": "Directeur",
+            "location": "paris",
+            "network_distance": "2,3",
+            "max_results": 10,
+            "auto_invite": false,
+            "industry": "Banques d’investissement",
+            "industry_id": "45",
+            "exclude_titles": []
+          },
+          "webhookUrl": "https://n8n.srv1213804.hstgr.cloud/webhook/Scrapping",
+          "executionMode": "production"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Quelle action ?": {
+      "main": [
+        [
+          {
+            "node": "Réponse1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Init config recherche",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Init config recherche": {
+      "main": [
+        [
+          {
+            "node": "Code - Compute hash",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase - Inserer resultats": {
+      "main": [
+        [
+          {
+            "node": "Auto invite ?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Auto invite ?": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Envoyer invitation (auto)": {
+      "main": [
+        [
+          {
+            "node": "Supabase - Marquer invite",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook1": {
+      "main": [
+        [
+          {
+            "node": "Quelle action ?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resolve location & build payload1": {
+      "main": [
+        [
+          {
+            "node": "Search profiles (Unipile)1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search profiles (Unipile)1": {
+      "main": [
+        [
+          {
+            "node": "HTTP - Upsert lk_searches",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Flatten + metadata1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Flatten + metadata1": {
+      "main": [
+        [
+          {
+            "node": "Supabase - Inserer resultats",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP - Lire curseur\t": {
+      "main": [
+        [
+          {
+            "node": "Recherche épuisée",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Compute hash": {
+      "main": [
+        [
+          {
+            "node": "HTTP - Lire curseur\t",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP - Upsert lk_searches": {
+      "main": [
+        []
+      ]
+    },
+    "Recherche épuisée": {
+      "main": [
+        [
+          {
+            "node": "Réponse - Recherche épuisée",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Resolve location & build payload1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Réponse",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP - Lire clients actifs": {
+      "main": [
+        [
+          {
+            "node": "Code - Build send list",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Build send list": {
+      "main": [
+        [
+          {
+            "node": "If - File non vide",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If - File non vide": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule - Scraping quotidien": {
+      "main": [
+        [
+          {
+            "node": "HTTP - Lire campagnes actives",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP - Lire campagnes actives": {
+      "main": [
+        [
+          {
+            "node": "Code - Init scraping par campagne",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Init scraping par campagne": {
+      "main": [
+        [
+          {
+            "node": "IF - Campagnes a scraper",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF - Campagnes a scraper": {
+      "main": [
+        [
+          {
+            "node": "Code - Resolve et Scrape Unipile",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Code - Resolve et Scrape Unipile": {
+      "main": [
+        [
+          {
+            "node": "Code - MAJ campagne et Inserer resultats",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule - 7h quotidien - Invitation": {
+      "main": [
+        [
+          {
+            "node": "HTTP - Lire clients actifs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Wait1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase - Marquer invite": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items1": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Envoyer et traiter": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "Code - Envoyer et traiter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait1": {
+      "main": [
+        [
+          {
+            "node": "Envoyer invitation (auto)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": true,
+    "errorWorkflow": "KpARxPgPgE2a5cue"
+  },
+  "versionId": "996c2e3f-425a-4558-9584-197914a3c904",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "14e09279a0e20e70e8b0a269c2cfc5795ea69f614e7138110af3dec7e7956b68"
+  },
+  "id": "u9NRd0JkerDhuipM",
+  "tags": []
+}

@@ -1,0 +1,1445 @@
+{
+  "name": "Kaizen - Conversation LinkedIn",
+  "nodes": [
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api22.unipile.com:15267/api/v1/chats/{{ $json.chat_id }}/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-KEY",
+              "value": "=___REDACTED_UNIPILE_KEY___"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "account_id",
+              "value": "={{ $json.account_id }}"
+            },
+            {
+              "name": "text",
+              "value": "={{ $json.pending_reply }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "bca01194-295e-4854-9d60-26a310144f1b",
+      "name": "Unipile - Envoyer reponse",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -32,
+        224
+      ]
+    },
+    {
+      "parameters": {
+        "tableId": "lk_messages",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "prospect_id",
+              "fieldValue": "={{ $('Get many rows').item.json.id }}"
+            },
+            {
+              "fieldId": "account_id",
+              "fieldValue": "={{ $('If').item.json.account_id }}"
+            },
+            {
+              "fieldId": "direction",
+              "fieldValue": "outbound"
+            },
+            {
+              "fieldId": "content",
+              "fieldValue": "={{ $('If').item.json.pending_reply }}"
+            },
+            {
+              "fieldId": "sent_at",
+              "fieldValue": "={{ new Date().toISOString() }}"
+            },
+            {
+              "fieldId": "message_id",
+              "fieldValue": "={{ $('Unipile - Envoyer reponse').item.json.message_id }}"
+            }
+          ]
+        }
+      },
+      "id": "d7e31334-77d3-48d5-8eb4-5213f614c612",
+      "name": "Supabase - Message sortant",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        192,
+        224
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": "mWip0WqnB57aANW3",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "lk_prospects",
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $json.prospect_id }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "last_reply_at",
+              "fieldValue": "={{ new Date().toISOString() }}"
+            },
+            {
+              "fieldId": "message_count",
+              "fieldValue": "={{ $('Get many rows').item.json.message_count }}"
+            },
+            {
+              "fieldId": "processing_status",
+              "fieldValue": "idle"
+            },
+            {
+              "fieldId": "pending_reply",
+              "fieldValue": "={{ null }}"
+            },
+            {
+              "fieldId": "scheduled_send_at",
+              "fieldValue": "={{ null }}"
+            }
+          ]
+        }
+      },
+      "id": "9def1224-e9cb-427f-87c5-e2681b05adbd",
+      "name": "Supabase - Update prospect",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        416,
+        224
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": "mWip0WqnB57aANW3",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {}
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -704,
+        224
+      ],
+      "id": "c50fd3a0-8195-4857-955e-faf0448d1d4a",
+      "name": "Schedule Trigger",
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "lk_prospects",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "scheduled_send_at",
+              "condition": "lte",
+              "keyValue": "={{ $now }}"
+            },
+            {
+              "keyName": "ai_enabled",
+              "condition": "is",
+              "keyValue": "true"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        -480,
+        224
+      ],
+      "id": "2c0537c9-eab9-4499-a67b-8d4475cc6763",
+      "name": "Get many rows",
+      "credentials": {
+        "supabaseApi": {
+          "id": "mWip0WqnB57aANW3",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "156faf09-04f1-46bd-98ba-3ac6be672a3c",
+              "leftValue": "={{ $json.pending_reply }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -256,
+        224
+      ],
+      "id": "7d162a50-08df-4dc4-b4c8-b2a431ea1bc1",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "sw-cond-conv-001",
+                    "leftValue": "={{ $('Supabase - Config client1').item.json.allowed_roles.includes('conversation') }}",
+                    "rightValue": "",
+                    "operator": {
+                      "type": "boolean",
+                      "operation": "true",
+                      "singleValue": true
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Conversation"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "id": "9d81d760-89ba-4e76-bf0e-12e77717e186",
+      "name": "Switch - Agent type",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        640,
+        544
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://api22.unipile.com:15267/api/v1/chats/{{ $('Webhook1').item.json.body.chat_id }}/messages",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "account_id",
+              "value": "={{ $('Code in JavaScript2').item.json.account_id }}"
+            },
+            {
+              "name": "limit",
+              "value": "50"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-KEY",
+              "value": "=___REDACTED_UNIPILE_KEY___"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "81ee237d-0868-44bf-abcd-07444abbb8e7",
+      "name": "Unipile - Historique IB",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        864,
+        640
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const items = $json.items || [];\nconst clientName = $('Supabase - Config client1').item.json.full_name || 'Client';\nconst chrono = items.filter(m => m.attendee_type === 'MEMBER' && !m.deleted);\nconst nombre_echanges = chrono.filter(m => m.is_sender === 1).length;\nconst historique = chrono.map(m => (m.is_sender === 1 ? clientName : 'Prospect') + ': ' + (m.text || '')).join('\\n');\nconst recus = chrono.filter(m => m.is_sender === 0);\nconst dernier_message = recus.length ? (recus[recus.length - 1].text || '') : ($('Webhook1').item.json.body.message || '');\nreturn { historique, dernier_message, nombre_echanges };"
+      },
+      "id": "e5ea9b83-1bca-4f48-8a76-ae89e2173776",
+      "name": "Code - Discussion IB",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1088,
+        640
+      ]
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "claude-haiku-4-5-20251001"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=Conversation à analyser :\n\nDernier message du prospect :\n{{ $(\"Code - Discussion IB\").item.json.dernier_message }}\n\nHistorique de la conversation :\n{{ $(\"Code - Discussion IB\").item.json.historique }}\n\nDonne la note d'intérêt de ce prospect."
+            }
+          ]
+        },
+        "options": {
+          "system": "Tu es un expert en analyse de conversations commerciales B2B.\nÉvalue le niveau d'intérêt du prospect (0 à 10) en analysant le ton et l'intention réelle de la conversation.\n\n## Critères\n- 9-10 : demande explicite de RDV, call, volonté claire d'avancer\n- 7-8 : questions concrètes sur l'offre, besoin précis exprimé\n- 4-6 : intérêt poli, temporise, va réfléchir\n- 1-3 : peu d'engagement, répond par politesse\n- 0 : refus clair, demande à stopper\n\nRéponds UNIQUEMENT en JSON strict, sans texte autour :\n{\"note\": <0-10>, \"justification\": \"<1-2 phrases>\"}",
+          "maxTokens": 200,
+          "temperature": 0
+        }
+      },
+      "id": "f93afa7b-016f-4b4e-a1ad-f5bd0b35f06c",
+      "name": "Claude - Scoring IB",
+      "type": "@n8n/n8n-nodes-langchain.anthropic",
+      "typeVersion": 1,
+      "position": [
+        1312,
+        640
+      ],
+      "credentials": {
+        "anthropicApi": {
+          "id": "H0m8ZPv5z3Omd0Cw",
+          "name": "Anthropic account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const r = $json;\nlet text = '';\nif (typeof r.text === 'string') text = r.text;\nelse if (Array.isArray(r.content) && r.content[0] && r.content[0].text) text = r.content[0].text;\nelse if (r.message && r.message.content) text = r.message.content;\nelse if (r.output) text = (typeof r.output === 'string' ? r.output : JSON.stringify(r.output));\n\nlet note = 0;\nlet justification = '';\ntry {\n  const clean = (text || '').trim().replace(/^```json?\\n?/, '').replace(/\\n?```$/, '');\n  const parsed = JSON.parse(clean);\n  note = typeof parsed.note === 'number' ? Math.round(parsed.note) : 0;\n  justification = typeof parsed.justification === 'string' ? parsed.justification : '';\n} catch(e) {\n  justification = 'Erreur parsing scoring';\n}\n\nreturn { note, justification };\n"
+      },
+      "id": "cda87941-12ad-4fc9-8726-82ce47277476",
+      "name": "Code - Extraire scoring IB",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1664,
+        640
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "lk_prospects",
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $('Supabase - Prospect1').item.json.id }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "scoring",
+              "fieldValue": "={{ $json.note }}"
+            },
+            {
+              "fieldId": "scoring_justification",
+              "fieldValue": "={{ $json.justification }}"
+            },
+            {
+              "fieldId": "processing_status",
+              "fieldValue": "idle"
+            }
+          ]
+        }
+      },
+      "id": "4c202198-db4a-4a49-b15c-86ffc22f0aa5",
+      "name": "Update prospect IB",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1888,
+        640
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": "mWip0WqnB57aANW3",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "LinkedIn_message_entrant",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -704,
+        544
+      ],
+      "id": "90c69cd7-acb7-4ede-8c22-202947e7e34e",
+      "name": "Webhook1",
+      "webhookId": "5da1dde6-4df1-429b-aab1-b22faf450827"
+    },
+    {
+      "parameters": {
+        "jsCode": "let reconstructedItems = [];\n\nfor (let item of $input.all()) {\n  const body = item.json.body;\n\n  const payload = typeof body.payload === 'string'\n    ? JSON.parse(body.payload)\n    : body.payload;\n\n  reconstructedItems.push({\n    json: {\n      event: body.event,\n      account_id: body.account_id,\n      payload: payload\n    }\n  });\n}\n\nreturn reconstructedItems;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -480,
+        544
+      ],
+      "id": "ea009cb9-0758-4b40-8d03-9e92df0c8094",
+      "name": "Code in JavaScript2"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "lk_prospects",
+        "limit": 1,
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "chat_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Webhook1').item.json.body.chat_id }}"
+            }
+          ]
+        }
+      },
+      "id": "569257ea-be71-4a08-a278-a07a1380c72f",
+      "name": "Supabase - Prospect1",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        -256,
+        544
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": "mWip0WqnB57aANW3",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "lk_clients_config",
+        "limit": 1,
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "account_id",
+              "condition": "eq",
+              "keyValue": "={{ $json.account_id }}"
+            }
+          ]
+        }
+      },
+      "id": "033a7830-e806-476d-8971-7792e6b939a0",
+      "name": "Supabase - Config client1",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        -32,
+        544
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": "mWip0WqnB57aANW3",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $('Code in JavaScript2').item.json.event }}",
+              "rightValue": "message_received",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              },
+              "id": "76ed6538-134b-40a5-9832-b52bc96875a6"
+            },
+            {
+              "leftValue": "={{ $('Webhook1').item.json.body.is_sender }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              },
+              "id": "f3ea97e4-0cb7-4c11-88af-305629f81acc"
+            },
+            {
+              "leftValue": "={{ $('Webhook1').item.json.body.message }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              },
+              "id": "e56bf6d3-3916-442f-8b0d-ca09e2f86773"
+            },
+            {
+              "leftValue": "={{ $('Supabase - Prospect1').item.json.processing_status }}",
+              "rightValue": "idle",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              },
+              "id": "45603739-2dca-4af8-8b3c-64ca9abbdf82"
+            },
+            {
+              "id": "32d4c4d6-757b-4514-96cd-c2abf1e001c9",
+              "leftValue": "={{ $('Code in JavaScript2').item.json.account_id }}",
+              "rightValue": "BY85po44SUyPqFR8pbrm0Q",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            },
+            {
+              "id": "2cc8c29d-b0cb-4c91-98b2-208bc132ee43",
+              "leftValue": "={{ $('Supabase - Prospect1').item.json.ai_enabled }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "17ba76a3-4748-471a-9427-ca2aaeda9ea8",
+      "name": "If - Garde-fous1",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        192,
+        544
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "lk_prospects",
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $('Supabase - Prospect1').item.json.id }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "processing_status",
+              "fieldValue": "processing"
+            },
+            {
+              "fieldId": "last_reply_at",
+              "fieldValue": "={{ $now }}"
+            }
+          ]
+        }
+      },
+      "id": "dbfcce4f-1366-475e-98cb-5132d11e385b",
+      "name": "Supabase - Lock1",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        416,
+        544
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": "mWip0WqnB57aANW3",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "amount": "={{ Math.floor(Math.random() * ($('Supabase - Config client1').item.json.response_delay_max_minutes - $('Supabase - Config client1').item.json.response_delay_min_minutes + 1)) + $('Supabase - Config client1').item.json.response_delay_min_minutes }}"
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        864,
+        448
+      ],
+      "id": "8cb358b1-8d1f-4526-bc18-4328fac5e73d",
+      "name": "Wait1",
+      "webhookId": "f2bc44fa-92fe-4d07-81aa-0feab038f293"
+    },
+    {
+      "parameters": {
+        "url": "=https://api22.unipile.com:15267/api/v1/chats/{{ $('Webhook1').item.json.body.chat_id }}/messages",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "account_id",
+              "value": "={{ $('Code in JavaScript2').item.json.account_id }}"
+            },
+            {
+              "name": "limit",
+              "value": "50"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-KEY",
+              "value": "=___REDACTED_UNIPILE_KEY___"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "230965f2-c617-40f3-aa24-c413dfc6c2f3",
+      "name": "Unipile - Historique1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1088,
+        448
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const items = $json.items || [];\nconst clientName = $('Supabase - Config client1').item.json.full_name || 'Client';\nconst chrono = items.filter(m => m.attendee_type === 'MEMBER' && !m.deleted);\nconst nombre_echanges = chrono.filter(m => m.is_sender === 1).length;\nconst historique = chrono.map(m => (m.is_sender === 1 ? clientName : 'Prospect') + ': ' + (m.text || '')).join('\\n');\nconst recus = chrono.filter(m => m.is_sender === 0);\nconst dernier_message = recus.length ? (recus[recus.length - 1].text || '') : ($('Webhook1').item.json.body.message || '');\nreturn { historique, dernier_message, nombre_echanges };"
+      },
+      "id": "bd08546c-136a-4e0a-89a3-52585cbf757c",
+      "name": "Code - Discussion1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1376,
+        448
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "lk_agent_assignments",
+        "limit": 1,
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "account_id",
+              "condition": "eq",
+              "keyValue": "={{ $('Code in JavaScript2').item.json.account_id }}"
+            },
+            {
+              "keyName": "role",
+              "condition": "eq",
+              "keyValue": "conversation"
+            }
+          ]
+        }
+      },
+      "id": "c6ed6f54-1b95-478c-9ce4-8df667a3b756",
+      "name": "Supabase - Assignation conversation1",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1664,
+        448
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": "mWip0WqnB57aANW3",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "lk_agents",
+        "limit": 1,
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $json.agent_id }}"
+            }
+          ]
+        }
+      },
+      "id": "06158190-610b-40c5-9d55-0b1c400e0c88",
+      "name": "Supabase - Prompt conversation1",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1888,
+        448
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": "mWip0WqnB57aANW3",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "bd04a605-5b76-42da-9d1d-5e7abebb221d",
+              "leftValue": "={{ $json.is_active }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2112,
+        448
+      ],
+      "id": "c22cca3a-2ec8-464b-af0c-d57010700b8a",
+      "name": "If3"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "claude-sonnet-4-6"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=\nHistorique de la conversation:\n{{ $(\"Code - Discussion1\").item.json.historique }}\n\n\nDernier message du prospect:\n{{ $(\"Code - Discussion1\").item.json.dernier_message }}\n\nInfos prospect:\nEntreprise: {{ $(\"Supabase - Prospect1\").item.json.company_name || \"\" }}\nPoste: {{ $(\"Supabase - Prospect1\").item.json.occupation || \"\" }}\nResume: {{ $(\"Supabase - Prospect1\").item.json.profile_summary || \"\" }}\n\nNombre de messages envoyes: {{ $(\"Code - Discussion1\").item.json.nombre_echanges }}"
+            }
+          ]
+        },
+        "options": {
+          "system": "={{ $json.prompt_content }}",
+          "maxTokens": 500,
+          "temperature": 0.8
+        }
+      },
+      "id": "2f7d2729-e532-4e68-ac0a-48840876c733",
+      "name": "Claude - Reponse1",
+      "type": "@n8n/n8n-nodes-langchain.anthropic",
+      "typeVersion": 1,
+      "position": [
+        2336,
+        448
+      ],
+      "credentials": {
+        "anthropicApi": {
+          "id": "H0m8ZPv5z3Omd0Cw",
+          "name": "Anthropic account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const r = $json;\nlet text = '';\nif (typeof r.text === 'string') text = r.text;\nelse if (Array.isArray(r.content) && r.content[0] && r.content[0].text) text = r.content[0].text;\nelse if (r.message && r.message.content) text = r.message.content;\nelse if (r.output) text = (typeof r.output === 'string' ? r.output : JSON.stringify(r.output));\nreturn { reply: (text || '').trim() };"
+      },
+      "id": "ca1fbc10-ebba-4224-aedd-d3241ced2b83",
+      "name": "Code - Extraire reponse1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2688,
+        448
+      ]
+    },
+    {
+      "parameters": {
+        "tableId": "lk_messages",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "prospect_id",
+              "fieldValue": "={{ $('Supabase - Prospect1').item.json.id }}"
+            },
+            {
+              "fieldId": "account_id",
+              "fieldValue": "={{ $('Code in JavaScript2').item.json.account_id }}"
+            },
+            {
+              "fieldId": "direction",
+              "fieldValue": "inbound"
+            },
+            {
+              "fieldId": "content",
+              "fieldValue": "={{ $('Webhook1').item.json.body.message }}"
+            },
+            {
+              "fieldId": "message_id",
+              "fieldValue": "={{ $('Webhook1').item.json.body.message_id }}"
+            },
+            {
+              "fieldId": "sent_at",
+              "fieldValue": "={{ $('Webhook1').item.json.body.timestamp }}"
+            },
+            {
+              "fieldId": "message_type",
+              "fieldValue": "conversational"
+            }
+          ]
+        }
+      },
+      "id": "6726710a-8980-4f41-9c2b-5cd7930d0d55",
+      "name": "Supabase - Message entrant1",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        2912,
+        448
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": "mWip0WqnB57aANW3",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const config = $('Supabase - Config client1').item.json;\n\nconst delayMin = config.response_delay_min_minutes ?? 30;\nconst delayMax = config.response_delay_max_minutes ?? 45;\nconst activeStart = config.active_hours_start ?? 9;\nconst activeEnd = config.active_hours_end ?? 19;\nconst activeDays = config.active_days ?? [1, 2, 3, 4, 5];\nconst timezone = config.timezone ?? 'Europe/Paris';\n\nconst delayMinutes = Math.floor(Math.random() * (delayMax - delayMin + 1)) + delayMin;\nlet target = DateTime.now().setZone(timezone).plus({ minutes: delayMinutes });\n\nlet i = 0;\nwhile (i < 14) {\n  const h = target.hour;\n  const day = target.weekday;\n  if (activeDays.includes(day) && h >= activeStart && h < activeEnd) break;\n  if (!activeDays.includes(day) || h >= activeEnd) {\n    target = target.plus({ days: 1 }).set({ hour: activeStart, minute: 0, second: 0, millisecond: 0 });\n  } else {\n    target = target.set({ hour: activeStart, minute: 0, second: 0, millisecond: 0 });\n  }\n  i++;\n}\n\nreturn [{ json: { scheduled_send_at: target.toUTC().toISO() } }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3136,
+        448
+      ],
+      "id": "3b48ba86-eca5-484f-947e-effb736ae5e8",
+      "name": "Code in JavaScript3"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "claude-haiku-4-5-20251001"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=Conversation à analyser :\n\nDernier message du prospect :\n{{ $(\"Code - Discussion1\").item.json.dernier_message }}\n\nHistorique de la conversation :\n{{ $(\"Code - Discussion1\").item.json.historique }}\n\nDonne la note d'intérêt de ce prospect."
+            }
+          ]
+        },
+        "options": {
+          "system": "Tu es un expert en analyse de conversations commerciales B2B.\nÉvalue le niveau d'intérêt du prospect (0 à 10) en analysant le ton et l'intention réelle de la conversation.\n\n## Critères\n- 9-10 : demande explicite de RDV, call, volonté claire d'avancer\n- 7-8 : questions concrètes sur l'offre, besoin précis exprimé\n- 4-6 : intérêt poli, temporise, va réfléchir\n- 1-3 : peu d'engagement, répond par politesse\n- 0 : refus clair, demande à stopper\n\nRéponds UNIQUEMENT en JSON strict, sans texte autour :\n{\"note\": <0-10>, \"justification\": \"<1-2 phrases>\"}",
+          "maxTokens": 200,
+          "temperature": 0
+        }
+      },
+      "id": "7595a632-aa0f-4bc8-8bce-e2bf1326d0ac",
+      "name": "Claude - Scoring1",
+      "type": "@n8n/n8n-nodes-langchain.anthropic",
+      "typeVersion": 1,
+      "position": [
+        3360,
+        448
+      ],
+      "credentials": {
+        "anthropicApi": {
+          "id": "H0m8ZPv5z3Omd0Cw",
+          "name": "Anthropic account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const r = $json;\nlet text = '';\nif (typeof r.text === 'string') text = r.text;\nelse if (Array.isArray(r.content) && r.content[0] && r.content[0].text) text = r.content[0].text;\nelse if (r.message && r.message.content) text = r.message.content;\nelse if (r.output) text = (typeof r.output === 'string' ? r.output : JSON.stringify(r.output));\n\nlet note = 0;\nlet justification = '';\ntry {\n  const clean = (text || '').trim().replace(/^```json?\\n?/, '').replace(/\\n?```$/, '');\n  const parsed = JSON.parse(clean);\n  note = typeof parsed.note === 'number' ? Math.round(parsed.note) : 0;\n  justification = typeof parsed.justification === 'string' ? parsed.justification : '';\n} catch(e) {\n  justification = 'Erreur parsing scoring';\n}\n\nreturn {\n  note,\n  justification,\n  scheduled_send_at: $('Code in JavaScript3').item.json.scheduled_send_at\n};\n"
+      },
+      "id": "ac8df864-9db9-4962-837d-e84c61aa28f9",
+      "name": "Code - Extraire scoring1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3712,
+        448
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "lk_prospects",
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $('Supabase - Prospect1').item.json.id }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "pending_reply",
+              "fieldValue": "={{ $('Code - Extraire reponse1').item.json.reply }}"
+            },
+            {
+              "fieldId": "scheduled_send_at",
+              "fieldValue": "={{ $json.scheduled_send_at }}"
+            },
+            {
+              "fieldId": "processing_status",
+              "fieldValue": "idle"
+            },
+            {
+              "fieldId": "scoring",
+              "fieldValue": "={{ $json.note }}"
+            },
+            {
+              "fieldId": "scoring_justification",
+              "fieldValue": "={{ $json.justification }}"
+            },
+            {
+              "fieldId": "last_message_sent_at",
+              "fieldValue": "={{ $now.toISO() }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        3936,
+        448
+      ],
+      "id": "15bbb2ff-7038-47af-82ea-806891c28cbc",
+      "name": "Update a row1",
+      "credentials": {
+        "supabaseApi": {
+          "id": "mWip0WqnB57aANW3",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "tableId": "lk_messages",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "prospect_id",
+              "fieldValue": "={{ $('Supabase - Prospect1').item.json.id }}"
+            },
+            {
+              "fieldId": "account_id",
+              "fieldValue": "={{ $('Code in JavaScript2').item.json.account_id }}"
+            },
+            {
+              "fieldId": "direction",
+              "fieldValue": "inbound"
+            },
+            {
+              "fieldId": "content",
+              "fieldValue": "={{ $('Webhook1').item.json.body.message }}"
+            },
+            {
+              "fieldId": "message_id",
+              "fieldValue": "={{ $('Webhook1').item.json.body.message_id }}"
+            },
+            {
+              "fieldId": "sent_at",
+              "fieldValue": "={{ $('Webhook1').item.json.body.timestamp }}"
+            },
+            {
+              "fieldId": "message_type",
+              "fieldValue": "conversational"
+            }
+          ]
+        }
+      },
+      "id": "a10800c8-9f65-471b-8d16-4cf00810d9d5",
+      "name": "Supabase - Message entrant2",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        2128,
+        640
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": "mWip0WqnB57aANW3",
+          "name": "Supabase account"
+        }
+      }
+    }
+  ],
+  "pinData": {
+    "Schedule Trigger": [
+      {
+        "json": {
+          "timestamp": "2026-06-17T00:00:18.007+02:00",
+          "Readable date": "June 17th 2026, 12:00:18 am",
+          "Readable time": "12:00:18 am",
+          "Day of week": "Wednesday",
+          "Year": "2026",
+          "Month": "June",
+          "Day of month": "17",
+          "Hour": "00",
+          "Minute": "00",
+          "Second": "18",
+          "Timezone": "Europe/Berlin (UTC+02:00)"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Unipile - Envoyer reponse": {
+      "main": [
+        [
+          {
+            "node": "Supabase - Message sortant",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase - Message sortant": {
+      "main": [
+        [
+          {
+            "node": "Supabase - Update prospect",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get many rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get many rows": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Unipile - Envoyer reponse",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch - Agent type": {
+      "main": [
+        [
+          {
+            "node": "Wait1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Unipile - Historique IB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Unipile - Historique IB": {
+      "main": [
+        [
+          {
+            "node": "Code - Discussion IB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Discussion IB": {
+      "main": [
+        [
+          {
+            "node": "Claude - Scoring IB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude - Scoring IB": {
+      "main": [
+        [
+          {
+            "node": "Code - Extraire scoring IB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Extraire scoring IB": {
+      "main": [
+        [
+          {
+            "node": "Update prospect IB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook1": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript2": {
+      "main": [
+        [
+          {
+            "node": "Supabase - Prospect1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase - Prospect1": {
+      "main": [
+        [
+          {
+            "node": "Supabase - Config client1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase - Config client1": {
+      "main": [
+        [
+          {
+            "node": "If - Garde-fous1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If - Garde-fous1": {
+      "main": [
+        [
+          {
+            "node": "Supabase - Lock1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase - Lock1": {
+      "main": [
+        [
+          {
+            "node": "Switch - Agent type",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait1": {
+      "main": [
+        [
+          {
+            "node": "Unipile - Historique1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Unipile - Historique1": {
+      "main": [
+        [
+          {
+            "node": "Code - Discussion1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Discussion1": {
+      "main": [
+        [
+          {
+            "node": "Supabase - Assignation conversation1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase - Assignation conversation1": {
+      "main": [
+        [
+          {
+            "node": "Supabase - Prompt conversation1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase - Prompt conversation1": {
+      "main": [
+        [
+          {
+            "node": "If3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If3": {
+      "main": [
+        [
+          {
+            "node": "Claude - Reponse1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude - Reponse1": {
+      "main": [
+        [
+          {
+            "node": "Code - Extraire reponse1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Extraire reponse1": {
+      "main": [
+        [
+          {
+            "node": "Supabase - Message entrant1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase - Message entrant1": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript3": {
+      "main": [
+        [
+          {
+            "node": "Claude - Scoring1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude - Scoring1": {
+      "main": [
+        [
+          {
+            "node": "Code - Extraire scoring1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Extraire scoring1": {
+      "main": [
+        [
+          {
+            "node": "Update a row1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update prospect IB": {
+      "main": [
+        [
+          {
+            "node": "Supabase - Message entrant2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": true,
+    "timeSavedMode": "fixed",
+    "errorWorkflow": "KpARxPgPgE2a5cue",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "versionId": "c684d54d-003c-4c3d-8ec6-a13d1151309c",
+  "meta": {
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp",
+    "templateCredsSetupCompleted": true,
+    "instanceId": "14e09279a0e20e70e8b0a269c2cfc5795ea69f614e7138110af3dec7e7956b68"
+  },
+  "id": "fsSw8bIknV1cAgKx",
+  "tags": []
+}

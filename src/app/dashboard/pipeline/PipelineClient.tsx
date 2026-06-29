@@ -26,11 +26,11 @@ type Prospect = {
 };
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
-  invited: { label: "Invite", color: "text-text-muted border-border" },
-  connected: { label: "Connecte", color: "text-accent border-accent/30 bg-accent/10" },
-  in_conversation: { label: "En conversation", color: "text-positive border-positive/30 bg-positive/10" },
-  interested: { label: "Interesse", color: "text-warning border-warning/30 bg-warning/10" },
-  not_interested: { label: "Pas interesse", color: "text-danger border-danger/30 bg-danger/10" },
+  invited: { label: "Invité", color: "text-text-muted border-border" },
+  connected: { label: "Connecté", color: "text-accent border-accent/30 bg-accent/10" },
+  in_conversation: { label: "En discussion", color: "text-positive border-positive/30 bg-positive/10" },
+  interested: { label: "Intéressé", color: "text-warning border-warning/30 bg-warning/10" },
+  not_interested: { label: "Pas intéressé", color: "text-danger border-danger/30 bg-danger/10" },
 };
 
 const INTENT_LABELS: Record<string, { label: string; color: string }> = {
@@ -179,7 +179,7 @@ export default function PipelineClient({ prospects }: { prospects: Prospect[] })
         >
           <option value="all">Tous les scores</option>
           <option value="hot">Chaud (7+)</option>
-          <option value="warm">Tiede (4-6)</option>
+          <option value="warm">Tiède (4-6)</option>
           <option value="cold">Froid (1-3)</option>
         </select>
 
@@ -210,7 +210,7 @@ export default function PipelineClient({ prospects }: { prospects: Prospect[] })
                 { key: "scoring", label: "Score", align: "center" },
                 { key: "message_count", label: "Msgs", align: "center" },
                 { key: "ai_enabled", label: "IA", align: "center" },
-                { key: "last_activity", label: "Derniere activite", align: "left" },
+                { key: "last_activity", label: "Dernière activité", align: "left" },
               ].map(({ key, label, align }) => (
                 <th
                   key={label}

@@ -24,7 +24,7 @@ const DELAY_LABELS: Record<DelayMode, { label: string; desc: string }> = {
   },
   lent: {
     label: "Lent",
-    desc: "Reponses plus espacees, recommande pour les comptes recents ou en warm-up.",
+    desc: "Reponses plus espacees, recommande pour les comptes recents ou en rodage.",
   },
 };
 
@@ -117,7 +117,7 @@ export default function SettingsClient({
     <form action={handleSubmit} className="space-y-6">
       {/* Cadence */}
       <section className="rounded-md border border-border bg-panel p-5">
-        <h2 className="font-display text-sm font-semibold uppercase tracking-widest text-text-muted">
+        <h2 className="font-display text-sm font-semibold text-text-muted">
           Cadence quotidienne
         </h2>
         <p className="mt-1 text-xs text-text-dim">
@@ -127,7 +127,7 @@ export default function SettingsClient({
 
         <div className="mt-5 grid grid-cols-1 gap-6 sm:grid-cols-2">
           <RangeSlider
-            label="Invitations acceptees / jour"
+            label="Invitations envoyees / jour"
             name="daily_invite_limit"
             value={inviteLimit}
             min={1}
@@ -151,7 +151,7 @@ export default function SettingsClient({
 
       {/* Delai de reponse */}
       <section className="rounded-md border border-border bg-panel p-5">
-        <h2 className="font-display text-sm font-semibold uppercase tracking-widest text-text-muted">
+        <h2 className="font-display text-sm font-semibold text-text-muted">
           Delai de reponse
         </h2>
         <p className="mt-1 text-xs text-text-dim">
@@ -202,7 +202,7 @@ export default function SettingsClient({
 
       {/* Creneaux de reponse */}
       <section className="rounded-md border border-border bg-panel p-5">
-        <h2 className="font-display text-sm font-semibold uppercase tracking-widest text-text-muted">
+        <h2 className="font-display text-sm font-semibold text-text-muted">
           Creneaux de reponse
         </h2>
         <p className="mt-1 text-xs text-text-dim">
@@ -308,7 +308,7 @@ export default function SettingsClient({
     </form>
 
     <section className="mt-8 space-y-4 border-t border-border pt-8">
-      <h2 className="font-display text-xs font-semibold uppercase tracking-widest text-text-dim">
+      <h2 className="font-display text-xs font-semibold text-text-dim">
         Notifications
       </h2>
       <div className="flex items-center justify-between gap-4 rounded-lg border border-border bg-panel p-4">

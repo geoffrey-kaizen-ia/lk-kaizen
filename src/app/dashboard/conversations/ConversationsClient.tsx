@@ -28,11 +28,11 @@ type Message = {
 };
 
 const STATUS_LABELS: Record<string, string> = {
-  invited: "Invite",
-  connected: "Connecte",
+  invited: "Invité",
+  connected: "Connecté",
   in_conversation: "En discussion",
-  interested: "Interesse",
-  not_interested: "Pas interesse",
+  interested: "Intéressé",
+  not_interested: "Pas intéressé",
 };
 
 function getInitials(name: string | null) {
@@ -163,7 +163,7 @@ export default function ConversationsClient({
       {/* Left panel — prospect list */}
       <div className="flex w-72 shrink-0 flex-col border-r border-border">
         <div className="border-b border-border px-4 py-3">
-          <h2 className="font-display text-xs font-semibold uppercase tracking-[0.2em] text-text-muted">
+          <h2 className="font-display text-xs font-semibold text-text-muted">
             Prospects
           </h2>
           {prospects.length > 0 && (

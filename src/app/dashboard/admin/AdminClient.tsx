@@ -104,7 +104,7 @@ function ClientRow({ client }: { client: Client }) {
 
       <div className="space-y-2.5">
         <div>
-          <p className="mb-1.5 font-display text-[10px] font-semibold uppercase tracking-widest text-text-dim">
+          <p className="mb-1.5 font-display text-[10px] font-semibold text-text-dim">
             Rôles activés
           </p>
           <div className="flex flex-wrap gap-3">
