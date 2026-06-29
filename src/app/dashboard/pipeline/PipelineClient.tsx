@@ -215,7 +215,7 @@ export default function PipelineClient({ prospects }: { prospects: Prospect[] })
                 <th
                   key={label}
                   onClick={key ? () => toggleSort(key) : undefined}
-                  className={`px-4 py-3 text-${align} text-xs font-medium uppercase tracking-wider text-text-dim ${key ? "cursor-pointer select-none hover:text-foreground" : ""}`}
+                  className={`px-4 py-3 text-${align} text-xs font-medium text-text-dim ${key ? "cursor-pointer select-none hover:text-foreground" : ""}`}
                 >
                   <span className="inline-flex items-center gap-1">
                     {label}

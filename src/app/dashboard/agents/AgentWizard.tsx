@@ -949,14 +949,14 @@ export default function AgentWizard({
           />
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field
-              label="Description de l'objectif"
+              label="Ce que l'agent propose"
               required
               value={form.objectifDescription}
               onChange={(v) => updateField("objectifDescription", v)}
               placeholder='Ex: "Prendre un rdv"'
             />
             <Field
-              label="URL de l'objectif (optionnel)"
+              label="Lien de ton objectif (optionnel)"
               value={form.objectifUrl}
               onChange={(v) => updateField("objectifUrl", v)}
               placeholder="Ex: lien Calendly (laisser vide si tu cales le rdv toi-même)"

@@ -217,7 +217,7 @@ export default function Sidebar({
             <div className="flex items-center gap-2">
               <span className="h-2 w-2 rounded-full bg-positive shadow-[0_0_6px_var(--positive)]" />
               <span className="font-display text-[10px] text-text-muted">
-                LinkedIn online
+                LinkedIn connecté
               </span>
             </div>
           ) : (
@@ -228,7 +228,7 @@ export default function Sidebar({
                   <span className="relative inline-flex h-2 w-2 rounded-full bg-danger" />
                 </span>
                 <span className="font-display text-[10px] text-text-muted">
-                  LinkedIn offline
+                  LinkedIn déconnecté
                 </span>
               </div>
               <form action={connectLinkedin}>

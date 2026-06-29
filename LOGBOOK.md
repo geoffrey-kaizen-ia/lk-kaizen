@@ -5,6 +5,48 @@ Pour la vue d'ensemble par phases, voir [ROADMAP.md](./ROADMAP.md).
 
 ## 2026-06-29 — Audit builder agents vs 24 questions Geoffrey (méta-prompt + base de connaissance)
 
+### Diagnostic webhook Unipile `new_relation` (config OK, latence Unipile)
+- Symptôme : invitation acceptée ne déclenchait pas l'icebreaker. Toute la chaîne vérifiée : webhook Unipile correct (`source: users`, `new_relation`, enabled, `account_ids=[]`), WF n8n actif, comptes en statut `OK`.
+- Webhook prouvé fonctionnel : 4 appels `mode=webhook` traités à 12:42 (filtrés au node "Exclure compte test Geoffrey"). La nouvelle relation (Gilles, 14:11) déjà dans la liste Unipile mais event non émis.
+- Cause : Unipile détecte les nouvelles relations sur un cycle de sync interne, pas en temps réel. Resync messages (`GET /accounts/:id/sync`) = mauvais levier (pas d'endpoint pour forcer la détection des relations). Surveillance 30 min : toujours rien.
+- Point ouvert : si `new_relation` ne tombe pas sous quelques heures, à remonter au support Unipile.
+- Constaté : le compte `1tGd_kZHRFCGb6-UUbilnw` (LinkedIn de Nicolas) est rattaché dans lk_clients_config à `djteks@gmail.com` (mode template) ; aucune ligne pour `nicolas@kaizenia.fr`. Mapping à clarifier.
+
+### Garde-fou anti-doublon icebreaker (build n8n guidé, WF `0yQOYs1Ffiqtj4IX`)
+- Objectif : ne pas envoyer l'icebreaker si une conversation existe déjà avec le prospect. Inséré sur la branche cron, avant le node d'envoi `Unipile - Envoyer icebreaker1`.
+- 4 nodes : A `Unipile - Chats du compte` (GET `/chats` filtré account_id) ; B Code `Deja un chat ?` (match `attendee_provider_id` == `linkedin_id` → booléen `already_contacted`) ; C IF `Deja contacte ?` ; D Supabase `Update Prospect1` (branche skip : `status=in_conversation` + `processing_status=idle`).
+- Câblage cible : C TRUE → D → Loop Over Items (skip, pas d'envoi) ; C FALSE → Envoyer icebreaker1.
+- Piège corrigé sur D : ne jamais écrire de valeur vide dans une colonne `timestamptz` (`last_message_sent_at` / `scheduled_send_at`) → erreur Postgres ; gardé seulement `status` + `processing_status` (le changement de status suffit à sortir le prospect de la file).
+- Testé : fiche prospect de test Anthony MAGDU créée (id `3062d60e-85f7-4cb0-9a94-a44ecbecb048`, compte Nicolas). Node B renvoie bien `already_contacted: true` une fois un chat existant.
+- Incident test : armer la fiche (`scheduled_send_at` passé) alors que le garde-fou n'était pas câblé a déclenché un VRAI envoi du message de test à Anthony (chat créé) + fiche coincée en `processing`. Débloquée en base (`processing_status=idle`, `scheduled_send_at=null`).
+- Point ouvert : finir le câblage C+D, re-tester Anthony (doit partir sur TRUE sans envoi), ré-exporter le WF (`.n8n-raw/` + `sanitize.mjs`), puis supprimer la fiche test Anthony.
+
+### Plan de réponse à l'audit plateforme de Geoffrey
+- Audit consolidé reçu (6 écrans + doctrine + relances + réactivation réseau + mode hard test). Vérifié écran par écran contre le code réel (4 explorations parallèles), pas de code modifié pour le plan lui-même.
+- Constat : plateforme bien plus avancée que l'audit ne le suppose. Beaucoup de P0/P1/P2 déjà faits.
+- Plan écrit dans [docs/audit-geoffrey-plan.md](./docs/audit-geoffrey-plan.md) : statut réel (fait/partiel/à faire) + faisabilité + propriétaire (dashboard / n8n guidé / base / décision Geoffrey), organisé en vagues.
+- Décisions produit isolées pour Geoffrey : écart posts (injecter vs aligner exemples), réactivation réseau (report V2 + discours commercial), statut terminal "RDV pris", relances paramétrables par campagne.
+
+### Corrections wording & cohérence dashboard (working tree, non committé, tsc OK)
+- Wizard agent : astérisque "Preuves & résultats" rendu rouge (prop `required` sur `ListField`) ; exemple de ton aligné vouvoiement ; menu "Style d'écriture" dont les exemples s'adaptent au ton (tu → "t'as ?", vous → "vous avez ?") ; libellés "Style de message"/"Style de conversation" unifiés en "Style d'écriture".
+- "Icebreaker" résiduel → "Prise de contact" (AgentsClient, 2 endroits visibles).
+- TestAgentModal : "vos vrais prospects" → "tes" ; mot "prompt" masqué.
+- Settings : curseur "invitations acceptées" → "envoyées" (c'est l'envoi qu'il plafonne) ; "warm-up" → "rodage".
+- Statuts unifiés "En discussion" (CRM disait "En conversation") + tous accentués à l'identique (Invité/Connecté/Intéressé/Pas intéressé) sur Conversations + CRM.
+- Stats : accents remis (Résultats, période, données, reçus/envoyés, Évolution, Détail, Début) + titres de section dé-capitalisés. Conversations + CRM : capitales/accents (Prospects, Tiède, Dernière activité). Prospects : "Objectif (profils)" → "Nombre de profils à cibler".
+- Décision : NE PAS désactiver le menu Conversation quand son toggle est off (le flux impose de choisir l'agent AVANT de pouvoir l'activer ; désactiver casserait l'assignation). Comportement actuel conservé.
+- Point ouvert : revue visuelle validée par Nicolas (retours astérisque + ton corrigés), reste à committer toute la vague.
+
+### Cadence invitations : socle 20 + bugs d'envoi (investigation base + n8n)
+- Cause racine "nouveau client à 25" : la colonne `lk_clients_config.daily_invite_limit` avait un DÉFAUT de 25 (> socle 20). Migration `socle_invite_limit_defaut_20` appliquée : défaut passé à 20 + lignes existantes >20 ramenées à 20 (djteks 25→20). Vérifié : défaut=20, les 4 comptes à 20. Fallbacks code des pages prospects/settings aussi passés à 20.
+- Écart 25 vs 20 entre écrans expliqué : Réglages bride au socle (20), Recherche prospects affichait la valeur brute (25).
+- Écart compteur 11 vs 13 envoyés : la branche auto-invite n'enregistre pas les échecs (invitations refusées par LinkedIn disparaissent sans trace) et ne crée pas de prospect (djteks = 0 prospect malgré 11 invités). Le cron quotidien, lui, fait les deux.
+- BUG GRAVE — validation manuelle contournée : lancer la campagne auto "DJ Mariage Auto" a invité 10 profils "à valider" de la campagne MANUELLE "DJ Mariage" + 1 ligne d'un AUTRE compte client. Prouvé par l'output : 12 lignes traitées venant de 3 campagnes / 2 comptes. Cause : la boucle auto-invite n'est pas scopée à la campagne, et `Supabase - Marquer invite` filtre par `account_id+provider_id` (non unique → tombe sur la mauvaise ligne).
+- Fix n8n défini (à appliquer par Nicolas, guidé UI) : dans `Auto invite ?` ajouter 2 conditions (`search_id` = campagne courante, `status` = selected, combinateur AND) ; dans `Supabase - Marquer invite` remplacer le filtre par `id eq {{ $('Loop Over Items').item.json.id }}`.
+- Point ouvert : Nicolas applique les 2 modifs n8n + test campagne auto 1-2 profils. Contournement en attendant : rester en mode validation manuelle.
+- Point ouvert (SÉRIEUX) : fuite multi-tenant constatée (un autre compte client touché par le mismark) — le fix par `id` la ferme, à confirmer.
+- Point ouvert : la branche auto-invite devrait créer le prospect + enregistrer les échecs comme le cron quotidien.
+
 ### Bug Karine : icebreakers envoyés à des connexions non invitées par le SaaS (investigation + fix n8n)
 - Symptôme : 3 icebreakers partis le 29/06 ~09:00 pour Karine (`k.letennier@atil-evenements.com`, account `YIKlrU-VRTG4_VyElJMheg`) vers Vincent Bechtel / Cédric Parat / David Le Tiec.
 - Cause racine 1 : le WF Icebreaker `0yQOYs1Ffiqtj4IX` ne lisait JAMAIS `lk_clients_config.icebreaker_enabled`. Il testait `lk_agent_assignments.is_enabled` (toggle par rôle) en le confondant avec le master switch. Les deux colonnes coexistent (dashboard : `toggleRoleEnabled` vs `toggleIcebreakerEnabled`).

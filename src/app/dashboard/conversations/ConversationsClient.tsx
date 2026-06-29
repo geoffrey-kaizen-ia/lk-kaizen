@@ -270,7 +270,7 @@ export default function ConversationsClient({
       {!selectedProspect ? (
         <div className="flex flex-1 items-center justify-center">
           <p className="text-sm text-text-muted">
-            Selectionnez une conversation.
+            Sélectionnez une conversation.
           </p>
         </div>
       ) : (
