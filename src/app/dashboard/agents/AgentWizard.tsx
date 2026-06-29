@@ -1135,6 +1135,20 @@ export default function AgentWizard({
               </select>
             </div>
           </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-text-muted">Langue</label>
+            <p className="mb-1.5 text-xs text-text-dim">
+              Par défaut l&apos;agent reste en français même si le prospect glisse quelques mots dans une autre langue. L&apos;alignement complet le fait répondre dans la langue du prospect.
+            </p>
+            <select
+              value={form.languageMode}
+              onChange={(e) => updateField("languageMode", e.target.value as AgentFormData["languageMode"])}
+              className="w-full rounded-md border border-border-strong bg-panel-raised px-3 py-2 text-sm text-foreground focus:border-accent focus:outline-none"
+            >
+              <option value="fr_tolerant">Français tolérant (recommandé)</option>
+              <option value="prospect_aligned">S&apos;aligner sur la langue du prospect</option>
+            </select>
+          </div>
           <ListField
             label="Exemples de ta facon de t'exprimer (optionnel)"
             helper="Quelques phrases types pour que l'IA reprenne ton style."
@@ -1151,8 +1165,8 @@ export default function AgentWizard({
       {formStep === 5 && (
         <div className="space-y-4">
           <ListField
-            label="Criteres de qualification"
-            helper="Ce que le prospect doit valider pour etre qualifie."
+            label="Criteres importants (optionnel)"
+            helper="Un ou deux criteres vraiment importants. L'agent ne pose une question de qualification que s'il lui en manque un au moment de proposer, jamais une batterie de questions."
             items={form.qualificationCriteria}
             onAdd={() => addListItem("qualificationCriteria")}
             onChange={(i, v) => updateListItem("qualificationCriteria", i, v)}
@@ -1183,6 +1197,32 @@ export default function AgentWizard({
             onChange={(v) => updateField("additionalInstructions", v)}
             placeholder="Regles ou contexte que l'IA doit absolument connaitre."
             rows={3}
+          />
+          <div>
+            <label className="mb-1 block text-sm font-medium text-text-muted">
+              Nombre maximum de messages de l&apos;agent
+            </label>
+            <p className="mb-1.5 text-xs text-text-dim">
+              Plafond de messages que l&apos;agent envoie sur toute la conversation, premier message inclus. Au dernier, il propose ou il conclut. Évite les boucles sans fin.
+            </p>
+            <select
+              value={String(form.maxMessages)}
+              onChange={(e) => updateField("maxMessages", Number(e.target.value))}
+              className="w-full rounded-md border border-border-strong bg-panel-raised px-3 py-2 text-sm text-foreground focus:border-accent focus:outline-none sm:w-48"
+            >
+              <option value="3">3 messages</option>
+              <option value="4">4 messages (recommandé)</option>
+              <option value="5">5 messages</option>
+              <option value="6">6 messages</option>
+            </select>
+          </div>
+          <TextAreaField
+            label="Réponse si on demande si c'est une IA (optionnel)"
+            helper="Par défaut, si un prospect demande sérieusement si c'est automatisé, l'agent se tait et te laisse reprendre la main. Si tu écris une ligne honnête ici, l'agent pourra répondre une fois dans cet esprit puis continuer."
+            value={form.iaDisclosure}
+            onChange={(v) => updateField("iaDisclosure", v)}
+            placeholder="Ex : oui j'utilise un assistant pour gérer mes premiers échanges, mais je lis tout et je reprends dès que c'est utile."
+            rows={2}
           />
         </div>
       )}

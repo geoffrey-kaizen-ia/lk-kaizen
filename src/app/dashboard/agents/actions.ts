@@ -190,7 +190,7 @@ Nombre de messages envoyes: ${input.nombreEchanges}`;
     const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
     const response = await anthropic.messages.create({
       model: TEST_MODEL,
-      max_tokens: 500,
+      max_tokens: 700,
       temperature: 0.8,
       system: input.promptContent,
       messages: [{ role: "user", content: userMessage }],

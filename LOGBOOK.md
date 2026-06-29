@@ -3,7 +3,36 @@
 Journal chronologique des sessions de travail. Le plus recent en haut.
 Pour la vue d'ensemble par phases, voir [ROADMAP.md](./ROADMAP.md).
 
+## 2026-06-29 — Audit builder agents vs 24 questions Geoffrey (méta-prompt + base de connaissance)
+
+### Audit (pas de code modifié, session d'analyse)
+- Passé en revue les 24 questions de Geoffrey sur le prompt généré / la base de connaissance, réponses point par point (état actuel vs projection). Bloc copier-coller fourni à Geoffrey.
+- Constat icebreaker (`firstMessageTemplate.ts`, V1.3) DÉJÀ avancé : sortie JSON `{message, accroche, profil_insuffisant}`, parsing défensif (strip balises + try/catch, repli brut) dans le modal de test, chargement d'un vrai profil via Unipile (`scrapeLinkedInProfile`), mode diagnostic/proposition_directe porté par `structureMessage`, blocs optionnels qui disparaissent proprement, contrôle de longueur, lien objectif déjà facultatif.
+- Constat conversation (`promptTemplate.ts`) = encore l'ancien template "Setter IA" : pas d'états, pas de JSON, pas de plafond, `structureMessage` non injecté. Le méta-prompt Mode B de Geoffrey toujours pas câblé.
+- Distinction posée : plusieurs questions (historique réinjecté à chaque tour, JSON à 5 champs etat/raison_handover/enjeu_detecte/cta_propose, plafond cumulé icebreaker+conversation, critères de qualif importants, gestion "êtes-vous une IA" + iaDisclosure, champs problème/preuves obligatoires) décrivent l'agent de CONVERSATION, pas l'icebreaker.
+
+### Points ouverts / décisions
+- Point ouvert : récupérer la dernière version du prompt ICEBREAKER envoyée par Geoffrey (pas dans le repo, seul le méta-prompt conversation y est) pour la différencier ligne à ligne avec la V1.3 en live.
+- Point ouvert : confirmer avec Geoffrey que les questions historique / JSON 5 champs / plafond / qualif / "êtes-vous une IA" / problème+preuves visaient bien l'agent de conversation.
+- Décision à trancher (Q20 versionnage) : prompt figé à la création aujourd'hui, mais `knowledge_base` stocké → régénération possible. Reco = recompilation à la volée depuis `knowledge_base` à terme (cohérent compilateur de config).
+- Quick wins UI identifiés (à planifier) : vouvoiement + style sobre par défaut, réaccentuer le texte des prompts (ASCII volontaire, pas un bug d'encodage), renommer "Générer le prompt" → "Créer l'agent", remplacer "business" par "entreprise". Import site/doc pour pré-remplir (Q24) = nouveau chantier à part.
+
 ## 2026-06-26 — Retour onboarding Karine (Geoffrey) + corrections agents
+
+### Webhook Unipile message_received auto-géré dans le WF notify (anti-doublon)
+- Problème de départ : le webhook `message_received` en `account_ids: []` (tous les comptes) déclenchait aussi sur les comptes WhatsApp/Instagram connectés à Unipile → des milliers d'appels inutiles vers n8n.
+- Recherche API Unipile (doc officielle) : AUCUN filtre par provider/type de compte sur les webhooks (seul `account_ids` filtre), et AUCUN endpoint d'update — uniquement create / list / delete. Donc whitelist explicite obligatoire + "supprimer puis recréer" est la seule méthode pour faire évoluer la liste.
+- WF notify (webhook `unipile-notify` → PATCH lk_clients_config) étendu : après le PATCH, recrée le webhook `LinkedIn_message_entrant` à chaque nouveau client. Chaîne ajoutée : `Create Webhook` (POST, `account_ids` = comptes LinkedIn lus dans lk_clients_config, `events: ["message_received"]`) → `List WebHook` (GET) → `Find Old webhook` (Code) → `Delete Webhook` (DELETE) → `Respond OK`.
+- Ordre create-first volontaire : si la suppression réussit mais la création échoue, on garderait zéro webhook ; en créant d'abord, un pépin laisse juste un doublon (dédupliqué côté lk_messages, et auto-nettoyé au run suivant).
+- Bugs résolus pendant le build : (1) sortie de `List WebHook` = un objet unique avec un tableau `.items` imbriqué (pas des lignes n8n) ; (2) identification du nouveau webhook sans référencer le nœud de création par son nom (plantait "Referenced node doesn't exist") → on garde le `LinkedIn_message_entrant` avec le plus de comptes, on supprime les autres ; (3) nœud `Delete Webhook` était en GET par défaut (404 "Cannot GET") → passé en DELETE.
+- `Find Old webhook` testé OK (sort bien l'ancien id à 3 comptes `hcIYG_EwR8OTw2Esn24PDA`). Point ouvert : confirmer le test final après passage en DELETE (qu'il ne reste qu'un seul `LinkedIn_message_entrant`, celui à 4 comptes avec Nicolas).
+- Point ouvert (sécu) : la service_role key est en dur dans le body du nœud PATCH "Update Supabase" (et a circulé dans l'export partagé) → la passer en credential n8n comme le nœud "Get many rows", et la régénérer dans Supabase par précaution.
+
+### Méta-prompt agent conversation — refonte Geoffrey (en attente, à reprendre)
+- Geoffrey a transmis une version de référence consolidée du méta-prompt de l'agent de conversation (Mode B) : trajectoire pilotée par l'état réel du CTA (invitation posée oui/non) plutôt que par le mode déclaré, bascule auto en CAS 2 après proposition, convergence rapide (1 relance d'affinage max), mise en cause IA = passage de main par défaut, contrat de sortie JSON explicite (`message`/`etat`/`raison_handover`/`enjeu_detecte`/`cta_propose`).
+- **Geoffrey itère encore dessus, pas verrouillé** → rien câblé pour l'instant. Prompt archivé tel quel dans [docs/meta-prompt-conversation-geoffrey.md](./docs/meta-prompt-conversation-geoffrey.md) pour ne pas le perdre.
+- Travail builder à prévoir quand la version sera figée (`promptTemplate.ts` + `AgentWizard.tsx`) : nouveaux champs `structureMessage` (injecté aussi dans le méta-prompt), `iaDisclosure` (optionnel), `maxMessages` (défaut 4, possédé par l'orchestration car traverse 2 prompts), critères de qualif importants séparés, réglage de langue (français tolérant / alignement complet), type d'invitation avec/sans lien, parsing JSON défensif côté n8n.
+
 
 ### Retour reçu (RDV onboarding Karine)
 - Geoffrey a transmis le feedback du 1er RDV onboarding : bugs scraping (secteur ignoré, contacts 1er degré présents), bouton "Modifier" agent inopérant, prompt Kaizen visible, message test pas naturel / trop long / avec tirets, + axes UX wizard (tags, préremplissage, lien objectif conditionnel, longueur d'accroche).
