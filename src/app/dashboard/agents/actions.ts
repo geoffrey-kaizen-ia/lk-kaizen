@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache";
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
+import { canAssign } from "@/lib/crash-test/gate";
+import type { TestStatus } from "@/lib/crash-test/types";
 
 const TEST_MODEL = "claude-sonnet-4-6";
 
@@ -140,6 +142,21 @@ export async function upsertAssignment(role: string, agentId: string) {
   const supabase = await createClient();
   const accountId = await getAccountId();
   if (!accountId) return { error: "Compte non configure" };
+
+  // Garde crash test : seul un agent valide peut etre assigne a un role de prod.
+  const { data: agent } = await supabase
+    .from("lk_agents")
+    .select("test_status")
+    .eq("id", agentId)
+    .maybeSingle();
+
+  if (!agent) return { error: "Agent introuvable" };
+  if (!canAssign((agent.test_status ?? "untested") as TestStatus)) {
+    return {
+      error:
+        "Cet agent doit reussir le crash test avant d'etre assigne a un role.",
+    };
+  }
 
   const { error } = await supabase
     .from("lk_agent_assignments")
