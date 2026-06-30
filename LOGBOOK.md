@@ -3,7 +3,34 @@
 Journal chronologique des sessions de travail. Le plus recent en haut.
 Pour la vue d'ensemble par phases, voir [ROADMAP.md](./ROADMAP.md).
 
+## 2026-06-30 — Scission du workflow Icebreaker en deux (n8n) + documentation
+
+### Icebreaker découpé : détection vs envoi
+- Nicolas a scindé l'Icebreaker unique en deux workflows n8n, pour garder un log d'exécutions lisible (le schedule sur les minutes noyait le journal des invitations acceptées).
+- `0yQOYs1Ffiqtj4IX` (garde l'ID, renommé "Invitation acceptée") : webhook `unipile-new-relation`, génère l'icebreaker (Claude) et crée le prospect avec le texte en attente. N'envoie plus.
+- NOUVEAU `HdUkHiDzT9gpTvgV` "Schedule envoie message" : scheduleTrigger sur les minutes, pioche les prospects prêts, dédup chat, envoie via Unipile, écrit `lk_messages`, passe en `in_conversation`.
+- Contrat de liaison établi (pas d'appel direct, tout passe par la base) : prospect prêt = `lk_prospects.status=connected` + `pending_reply` rempli + `scheduled_send_at` échu ; après envoi ces 2 champs sont vidés et le statut passe à `in_conversation`. Gate d'envoi `If2` (`ai_enabled` ET `icebreaker_enabled`) désormais dans le WF d'envoi.
+
+### Documentation
+- Exports sanitizés versionnés : `docs/n8n/icebreaker-invitation.json` + `icebreaker-message.json` (clés Unipile caviardées, aucun JWT/service_role résiduel). Ancien `icebreaker.json` supprimé.
+- `docs/n8n/README.md` : 1 ligne Icebreaker → 2 lignes + nouvelle section « Icebreaker scindé en deux » (rôles + contrat de liaison). `sanitize.mjs` : slugs stables pour les 2 IDs. Exports périmés du 29/06 déplacés dans `.n8n-raw/_stale/`.
+- Point ouvert : confirmer l'intervalle réel du `Schedule Trigger` (l'export n'a pas de valeur explicite → 1 min par défaut côté n8n ; Nicolas évoque 5 min). À vérifier dans l'UI puis préciser la doc.
+- Constaté (en dur côté n8n) : la clé Unipile `X-API-KEY` du WF d'envoi est tapée en dur, pas en credential → rejoint le chantier rotation déjà ouvert.
+
+### Corrections wizard agents (retours spontanés Geoffrey) — commit `6b6f43c`, poussé/déployé
+- Champs obligatoires : le bouton "Suivant"/"Créer l'agent" était simplement grisé sans explication ("je clique, rien ne se passe"). Désormais cliquable + **bandeau rouge** listant nommément les champs manquants, sur les 2 formulaires (conversationnel ET prise de contact). Sur le bouton final, renvoi automatique vers la première étape incomplète. (`AgentWizard.tsx`)
+- Fenêtre de test : la croix ✕ remplacée par un bouton texte explicite **"← Revenir à la création de l'agent"** (depuis le wizard) / "← Fermer" (depuis la liste des agents). Corrige le sentiment de blocage dans la modale de test. (`TestAgentModal.tsx`, `TestFirstMessageModal.tsx`)
+- Test de l'agent conversationnel : ajout du bloc **"Charger un vrai profil"** (URL LinkedIn → remplit Poste depuis le headline, Résumé depuis l'à-propos via `scrapeLinkedInProfile`), comme en mode prise de contact. (`TestAgentModal.tsx`)
+- Validé `tsc --noEmit` OK + testé en live par Nicolas (les 3 points OK) avant commit. ESLint non configuré sur le projet → le build Vercel ne bloque pas dessus, tsc reste le garde-fou. Commit ciblé sur les 3 fichiers ; autres changements en cours (n8n/docs) laissés intacts.
+
 ## 2026-06-29 — Audit builder agents vs 24 questions Geoffrey (méta-prompt + base de connaissance)
+
+### Finitions wording audit Geoffrey (vague 2) + commits poussés
+- Vague de corrections du rapport Geoffrey (P0/P1/P2) committée et poussée sur `main` (commit `87cddd1`, déployée). Résout le point ouvert "reste à committer la vague".
+- 2e passe de finitions committée et poussée (commit `278015b`) : "LinkedIn online/offline" → "connecté/déconnecté" ; champs objectif unifiés sur les 2 types d'agent ("Ce que l'agent propose" + "Lien de ton objectif") ; entêtes de colonnes du CRM dé-capitalisés ; accent sur "Sélectionnez une conversation". tsc OK.
+- Clarification (rien à corriger) : les "vous" restants sont des exemples de messages de l'agent AU prospect (l'agent vouvoie par défaut = correct) ; les descriptions d'interface tutoient déjà ("quand un prospect accepte ton invitation").
+- Décision conservée : le menu Conversation reste cliquable quand son toggle est off (il faut choisir l'agent avant de pouvoir l'activer ; le bloquer casserait le flux).
+- Bug invitations auto — diagnostic affiné avec l'output réel (12 lignes traitées venant de 3 campagnes / 2 comptes, dont 10 d'une campagne MANUELLE). FIX PRÉCIS confirmé (à appliquer par Nicolas, UI) : dans `Auto invite ?` ajouter 2 conditions AND (`search_id` = campagne courante + `status` = selected) ; dans `Supabase - Marquer invite` filtrer par `id`. Working tree propre, tout poussé.
 
 ### Diagnostic webhook Unipile `new_relation` (config OK, latence Unipile)
 - Symptôme : invitation acceptée ne déclenchait pas l'icebreaker. Toute la chaîne vérifiée : webhook Unipile correct (`source: users`, `new_relation`, enabled, `account_ids=[]`), WF n8n actif, comptes en statut `OK`.

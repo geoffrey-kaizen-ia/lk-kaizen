@@ -20,7 +20,8 @@ const OUT_DIR = HERE;
 const SLUG_BY_ID = {
   wtLJvVIhegJj8szS: 'genere-lien-connexion',
   i8kR9LQwN8S1GPoH: 'unipile-notify-callback',
-  '0yQOYs1Ffiqtj4IX': 'icebreaker',
+  '0yQOYs1Ffiqtj4IX': 'icebreaker-invitation',
+  HdUkHiDzT9gpTvgV: 'icebreaker-message',
   fsSw8bIknV1cAgKx: 'conversation',
   u9NRd0JkerDhuipM: 'cron-invitations-scraping',
   IBiW7XPBmFjupoWy: 'icebreaker-legacy-airtable',

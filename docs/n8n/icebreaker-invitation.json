@@ -1,5 +1,5 @@
 {
-  "name": "Kaizen - Icebreaker LinkedIn",
+  "name": "Kaizen - Icebreaker LinkedIn - Invitation acceptée",
   "nodes": [
     {
       "parameters": {
@@ -14,7 +14,7 @@
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2.1,
       "position": [
-        -480,
+        -672,
         -336
       ],
       "webhookId": "f6d9182a-4bf0-419e-a10a-6ec3ab2d0da9"
@@ -57,7 +57,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
       "position": [
-        -32,
+        -224,
         -336
       ]
     },
@@ -87,7 +87,7 @@
       "type": "n8n-nodes-base.supabase",
       "typeVersion": 1,
       "position": [
-        192,
+        224,
         -336
       ],
       "credentials": {
@@ -123,7 +123,7 @@
       "type": "n8n-nodes-base.supabase",
       "typeVersion": 1,
       "position": [
-        416,
+        448,
         -336
       ],
       "credentials": {
@@ -154,7 +154,7 @@
       "type": "n8n-nodes-base.supabase",
       "typeVersion": 1,
       "position": [
-        864,
+        896,
         -336
       ],
       "credentials": {
@@ -194,7 +194,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
       "position": [
-        1088,
+        1120,
         -432
       ],
       "credentials": {
@@ -215,7 +215,7 @@
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3.2,
       "position": [
-        1312,
+        1344,
         -336
       ]
     },
@@ -253,7 +253,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.4,
       "position": [
-        1088,
+        1120,
         -240
       ],
       "credentials": {
@@ -273,7 +273,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1536,
+        1568,
         -336
       ]
     },
@@ -302,7 +302,7 @@
       "type": "@n8n/n8n-nodes-langchain.anthropic",
       "typeVersion": 1,
       "position": [
-        1984,
+        2016,
         -240
       ],
       "credentials": {
@@ -319,7 +319,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -256,
+        -448,
         -336
       ],
       "id": "46512885-0bdb-4373-b6f2-4e9af0cebec3",
@@ -382,7 +382,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
       "position": [
-        640,
+        672,
         -336
       ],
       "id": "a8148182-8c0f-4783-9b01-501371d9597b",
@@ -447,7 +447,7 @@
       "type": "n8n-nodes-base.switch",
       "typeVersion": 3.4,
       "position": [
-        1760,
+        1792,
         -336
       ],
       "id": "396840d6-5a77-4751-8c24-453b36da0c5d",
@@ -470,7 +470,7 @@
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        2336,
+        2368,
         -432
       ],
       "id": "1f67bf65-ed92-48ba-9b10-9857f8162cc3",
@@ -493,7 +493,7 @@
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        2336,
+        2368,
         -240
       ],
       "id": "c4e9ed34-21f7-4ac2-9f73-bc6842927365",
@@ -506,7 +506,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        2560,
+        2592,
         -336
       ],
       "id": "45aa89f1-23c8-4e83-a9c9-1d88a05d0411",
@@ -581,7 +581,7 @@
       "type": "n8n-nodes-base.supabase",
       "typeVersion": 1,
       "position": [
-        2784,
+        2816,
         -336
       ],
       "credentials": {
@@ -593,310 +593,26 @@
     },
     {
       "parameters": {
-        "rule": {
-          "interval": [
-            {
-              "field": "minutes"
-            }
-          ]
-        }
-      },
-      "type": "n8n-nodes-base.scheduleTrigger",
-      "typeVersion": 1.3,
-      "position": [
-        -480,
-        128
-      ],
-      "id": "c38e48fb-af02-4d60-a548-cdc25f810767",
-      "name": "Schedule Trigger"
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "strict",
-            "version": 3
-          },
-          "conditions": [
-            {
-              "id": "46727d37-5b93-4b95-ba63-dea6f23126f8",
-              "leftValue": "={{ $json.pending_reply }}",
-              "rightValue": "true",
-              "operator": {
-                "type": "string",
-                "operation": "exists",
-                "singleValue": true
-              }
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      },
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.3,
-      "position": [
-        192,
-        128
-      ],
-      "id": "b775753c-3d32-42c7-b043-712249f782e0",
-      "name": "If1"
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "=https://api22.unipile.com:15267/api/v1/chats/",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "X-API-KEY",
-              "value": "=___REDACTED_UNIPILE_KEY___"
-            }
-          ]
-        },
-        "sendBody": true,
-        "contentType": "multipart-form-data",
-        "bodyParameters": {
-          "parameters": [
-            {
-              "name": "account_id",
-              "value": "={{ $json.account_id }}"
-            },
-            {
-              "name": "attendees_ids",
-              "value": "={{ $('Loop Over Items').item.json.linkedin_id }}"
-            },
-            {
-              "name": "text",
-              "value": "={{ $('Loop Over Items').item.json.pending_reply }}"
-            }
-          ]
-        },
-        "options": {}
-      },
-      "id": "1bbaa4ad-217d-491a-a0e6-70cdc0210dad",
-      "name": "Unipile - Envoyer icebreaker1",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.4,
-      "position": [
-        1088,
-        -16
-      ]
-    },
-    {
-      "parameters": {
-        "tableId": "lk_messages",
-        "fieldsUi": {
-          "fieldValues": [
-            {
-              "fieldId": "prospect_id",
-              "fieldValue": "={{ $('Loop Over Items').item.json.id }}"
-            },
-            {
-              "fieldId": "account_id",
-              "fieldValue": "={{ $('Loop Over Items').item.json.account_id }}"
-            },
-            {
-              "fieldId": "direction",
-              "fieldValue": "outbound"
-            },
-            {
-              "fieldId": "content",
-              "fieldValue": "={{ $('Loop Over Items').item.json.pending_reply }}"
-            },
-            {
-              "fieldId": "message_id",
-              "fieldValue": "={{ $json.message_id }}"
-            },
-            {
-              "fieldId": "message_type",
-              "fieldValue": "icebreaker"
-            },
-            {
-              "fieldId": "sent_at",
-              "fieldValue": "={{ new Date().toISOString() }}"
-            }
-          ]
-        }
-      },
-      "id": "ff8ef177-88c4-47fe-a472-6c920f41623c",
-      "name": "Supabase - Enregistrer message1",
-      "type": "n8n-nodes-base.supabase",
-      "typeVersion": 1,
-      "position": [
-        1312,
-        -16
-      ],
-      "credentials": {
-        "supabaseApi": {
-          "id": "mWip0WqnB57aANW3",
-          "name": "Supabase account"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "options": {}
-      },
-      "type": "n8n-nodes-base.splitInBatches",
-      "typeVersion": 3,
-      "position": [
-        416,
-        -48
-      ],
-      "id": "372efb08-9050-45ad-95e0-ae67ecf9af5e",
-      "name": "Loop Over Items"
-    },
-    {
-      "parameters": {
-        "amount": 30
-      },
-      "type": "n8n-nodes-base.wait",
-      "typeVersion": 1.1,
-      "position": [
-        1760,
-        64
-      ],
-      "id": "03081417-0819-4ed2-bc0e-7fd138e9b697",
-      "name": "Wait",
-      "webhookId": "b337c419-69c2-4f2b-88ea-e1b3d8bd4db7"
-    },
-    {
-      "parameters": {
-        "operation": "update",
-        "tableId": "lk_prospects",
-        "filters": {
-          "conditions": [
-            {
-              "keyName": "id",
-              "condition": "eq",
-              "keyValue": "={{ $('Loop Over Items').item.json.id }}"
-            }
-          ]
-        },
-        "fieldsUi": {
-          "fieldValues": [
-            {
-              "fieldId": "chat_id",
-              "fieldValue": "={{ $('Unipile - Envoyer icebreaker1').item.json.chat_id }}"
-            },
-            {
-              "fieldId": "status",
-              "fieldValue": "in_conversation"
-            },
-            {
-              "fieldId": "last_message_sent_at",
-              "fieldValue": "={{ $now }}"
-            }
-          ]
-        }
-      },
-      "type": "n8n-nodes-base.supabase",
-      "typeVersion": 1,
-      "position": [
-        1536,
-        -16
-      ],
-      "id": "f3075156-cc55-4a00-a2fc-57c4d2d9e288",
-      "name": "Update Prospect",
-      "credentials": {
-        "supabaseApi": {
-          "id": "mWip0WqnB57aANW3",
-          "name": "Supabase account"
-        }
-      }
-    },
-    {
-      "parameters": {
         "operation": "getAll",
-        "tableId": "lk_clients_config",
+        "tableId": "lk_search_results",
+        "limit": 1,
+        "matchType": "allFilters",
         "filters": {
           "conditions": [
             {
               "keyName": "account_id",
               "condition": "eq",
-              "keyValue": "={{ $('Loop Over Items').item.json.account_id }}"
-            }
-          ]
-        }
-      },
-      "type": "n8n-nodes-base.supabase",
-      "typeVersion": 1,
-      "position": [
-        640,
-        -16
-      ],
-      "id": "618a5ab3-8c27-41a1-8af6-c58c5b97df95",
-      "name": "Verif AI Client",
-      "credentials": {
-        "supabaseApi": {
-          "id": "mWip0WqnB57aANW3",
-          "name": "Supabase account"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "strict",
-            "version": 3
-          },
-          "conditions": [
+              "keyValue": "={{ $json.account_id }}"
+            },
             {
-              "id": "7bd8532a-d4c7-4155-bcf4-6cdadab53afe",
-              "leftValue": "={{ $json.ai_enabled }}",
-              "rightValue": true,
-              "operator": {
-                "type": "boolean",
-                "operation": "equals"
-              }
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      },
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.3,
-      "position": [
-        864,
-        -16
-      ],
-      "id": "38f43e69-93a3-49d0-8b1c-ecc0460df2cf",
-      "name": "If2"
-    },
-    {
-      "parameters": {
-        "operation": "getAll",
-        "tableId": "lk_prospects",
-        "matchType": "allFilters",
-        "filters": {
-          "conditions": [
+              "keyName": "provider_id",
+              "condition": "eq",
+              "keyValue": "={{ $json.user_provider_id }}"
+            },
             {
               "keyName": "status",
               "condition": "eq",
-              "keyValue": "connected"
-            },
-            {
-              "keyName": "scheduled_send_at",
-              "condition": "lte",
-              "keyValue": "={{ $now }}"
-            },
-            {
-              "keyName": "ai_enabled",
-              "condition": "is",
-              "keyValue": "true"
-            },
-            {
-              "keyName": "processing_status",
-              "condition": "neq",
-              "keyValue": "processing"
+              "keyValue": "invited"
             }
           ]
         }
@@ -904,48 +620,11 @@
       "type": "n8n-nodes-base.supabase",
       "typeVersion": 1,
       "position": [
-        -256,
-        128
+        0,
+        -336
       ],
-      "id": "47454f31-f570-4fae-8f90-af8962998398",
-      "name": "Get Prospects",
-      "credentials": {
-        "supabaseApi": {
-          "id": "mWip0WqnB57aANW3",
-          "name": "Supabase account"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "operation": "update",
-        "tableId": "lk_prospects",
-        "filters": {
-          "conditions": [
-            {
-              "keyName": "id",
-              "condition": "eq",
-              "keyValue": "={{ $json.id }}"
-            }
-          ]
-        },
-        "fieldsUi": {
-          "fieldValues": [
-            {
-              "fieldId": "processing_status",
-              "fieldValue": "processing"
-            }
-          ]
-        }
-      },
-      "type": "n8n-nodes-base.supabase",
-      "typeVersion": 1,
-      "position": [
-        -32,
-        128
-      ],
-      "id": "9f0b9480-4b4d-4265-a211-b8d777cdf16b",
-      "name": "Update a row",
+      "id": "4b40beed-e965-48e7-97fe-f2de311fe959",
+      "name": "Supabase - Verif invite SaaS",
       "credentials": {
         "supabaseApi": {
           "id": "mWip0WqnB57aANW3",
@@ -954,67 +633,7 @@
       }
     }
   ],
-  "pinData": {
-    "Schedule Trigger": [
-      {
-        "json": {
-          "timestamp": "2026-06-29T11:15:33.002+02:00",
-          "Readable date": "June 29th 2026, 11:15:33 am",
-          "Readable time": "11:15:33 am",
-          "Day of week": "Monday",
-          "Year": "2026",
-          "Month": "June",
-          "Day of month": "29",
-          "Hour": "11",
-          "Minute": "15",
-          "Second": "33",
-          "Timezone": "Europe/Berlin (UTC+02:00)"
-        },
-        "pairedItem": {
-          "item": 0
-        }
-      }
-    ],
-    "Unipile - Connexion acceptee": [
-      {
-        "json": {
-          "headers": {
-            "host": "n8n.srv1213804.hstgr.cloud",
-            "user-agent": "axios/1.7.7",
-            "content-length": "587",
-            "accept": "application/json, text/plain, */*",
-            "accept-encoding": "gzip, compress, deflate, br",
-            "content-type": "application/json",
-            "x-forwarded-for": "62.210.90.197",
-            "x-forwarded-host": "n8n.srv1213804.hstgr.cloud",
-            "x-forwarded-port": "443",
-            "x-forwarded-proto": "https",
-            "x-forwarded-server": "23460070732b",
-            "x-real-ip": "62.210.90.197"
-          },
-          "params": {},
-          "query": {},
-          "body": {
-            "event": "new_relation",
-            "account_id": "YIKlrU-VRTG4_VyElJMheg",
-            "account_type": "LINKEDIN",
-            "webhook_name": "unipile-new-relation",
-            "timestamp": 1782631845000,
-            "user_full_name": "Vincent Bechtel",
-            "user_provider_id": "ACoAAAA9-6UBPOnVCxDeskhlvrtLKoosjYYUpIQ",
-            "user_public_identifier": "vincentbechtel",
-            "user_profile_url": "https://www.linkedin.com/in/vincentbechtel/",
-            "user_picture_url": "https://media.licdn.com/dms/image/v2/D4E03AQFobSj4WXyrOQ/profile-displayphoto-shrink_100_100/profile-displayphoto-shrink_100_100/0/1686907771409?e=1784160000&v=beta&t=ARAPGvU30L24Qt3ORZC_bllWGpp-nE5XkPpti-btaxw"
-          },
-          "webhookUrl": "https://n8n.srv1213804.hstgr.cloud/webhook/unipile-new-relation",
-          "executionMode": "production"
-        },
-        "pairedItem": {
-          "item": 0
-        }
-      }
-    ]
-  },
+  "pinData": {},
   "connections": {
     "Unipile - Connexion acceptee": {
       "main": [
@@ -1031,7 +650,7 @@
       "main": [
         [
           {
-            "node": "Supabase - Config client",
+            "node": "Supabase - Verif invite SaaS",
             "type": "main",
             "index": 0
           }
@@ -1206,130 +825,11 @@
         ]
       ]
     },
-    "Schedule Trigger": {
+    "Supabase - Verif invite SaaS": {
       "main": [
         [
           {
-            "node": "Get Prospects",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "If1": {
-      "main": [
-        [
-          {
-            "node": "Loop Over Items",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        []
-      ]
-    },
-    "Unipile - Envoyer icebreaker1": {
-      "main": [
-        [
-          {
-            "node": "Supabase - Enregistrer message1",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Supabase - Enregistrer message1": {
-      "main": [
-        [
-          {
-            "node": "Update Prospect",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Loop Over Items": {
-      "main": [
-        [],
-        [
-          {
-            "node": "Verif AI Client",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Wait": {
-      "main": [
-        [
-          {
-            "node": "Loop Over Items",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Update Prospect": {
-      "main": [
-        [
-          {
-            "node": "Wait",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Verif AI Client": {
-      "main": [
-        [
-          {
-            "node": "If2",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "If2": {
-      "main": [
-        [
-          {
-            "node": "Unipile - Envoyer icebreaker1",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Loop Over Items",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Get Prospects": {
-      "main": [
-        [
-          {
-            "node": "Update a row",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Update a row": {
-      "main": [
-        [
-          {
-            "node": "If1",
+            "node": "Supabase - Config client",
             "type": "main",
             "index": 0
           }
@@ -1346,7 +846,7 @@
     "errorWorkflow": "KpARxPgPgE2a5cue",
     "callerPolicy": "workflowsFromSameOwner"
   },
-  "versionId": "d7b48588-3dcf-4d10-81c9-eb74afa5dd89",
+  "versionId": "ccf7ae13-15ae-403a-843f-848f2052813b",
   "meta": {
     "aiBuilderAssisted": true,
     "builderVariant": "mcp",
