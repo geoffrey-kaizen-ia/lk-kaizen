@@ -48,6 +48,7 @@ type Agent = {
   prompt_content: string | null;
   is_active: boolean | null;
   knowledge_base: Record<string, unknown> | null;
+  test_status: string | null;
 };
 
 type Assignment = {
@@ -1321,6 +1322,21 @@ function RelanceCard({
   );
 }
 
+function TestStatusBadge({ status }: { status: string | null }) {
+  const map: Record<string, { label: string; cls: string }> = {
+    untested:  { label: "Non testé",      cls: "bg-panel-raised text-text-dim" },
+    testing:   { label: "Test en cours",  cls: "bg-accent/15 text-accent" },
+    validated: { label: "Validé",         cls: "bg-positive/15 text-positive" },
+    failed:    { label: "Échec",          cls: "bg-danger/15 text-danger" },
+  };
+  const s = map[status ?? "untested"] ?? map.untested;
+  return (
+    <span className={`rounded px-2 py-0.5 text-xs font-medium ${s.cls}`}>
+      {s.label}
+    </span>
+  );
+}
+
 function buildAgentSummary(agent: Agent): string | null {
   const kb = agent.knowledge_base as Record<string, unknown> | null;
   if (!kb) return null;
@@ -1387,6 +1403,7 @@ function AgentCard({
             <h2 className="text-base font-medium text-foreground">
               {agent.name ?? "Sans nom"}
             </h2>
+            <TestStatusBadge status={agent.test_status} />
             {assignedRoles.map((r) => (
               <span
                 key={r}

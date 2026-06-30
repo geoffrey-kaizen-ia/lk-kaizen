@@ -8,6 +8,7 @@ type Agent = {
   prompt_content: string | null;
   is_active: boolean | null;
   knowledge_base: Record<string, unknown> | null;
+  test_status: string | null;
 };
 
 type Assignment = {
@@ -43,7 +44,7 @@ export default async function AgentsPage({
   ] = await Promise.all([
     supabase
       .from("lk_agents")
-      .select("id, name, objectif, prompt_content, is_active, knowledge_base"),
+      .select("id, name, objectif, prompt_content, is_active, knowledge_base, test_status"),
     supabase
       .from("lk_agent_assignments")
       .select("role, agent_id, is_enabled"),
