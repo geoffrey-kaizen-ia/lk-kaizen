@@ -918,7 +918,7 @@ export default function ProspectsClient({
                     </div>
                   )}
                   <div className="flex justify-between gap-4">
-                    <span className="shrink-0 text-text-dim">Profils à cibler</span>
+                    <span className="shrink-0 text-text-dim">Nombre de profils à cibler</span>
                     <span className="font-medium text-foreground">{c.target_count} profils</span>
                   </div>
                   <div className="flex justify-between gap-4">
@@ -1012,7 +1012,7 @@ export default function ProspectsClient({
         <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-4 py-8">
           <div className="w-full max-w-lg rounded-lg border border-border bg-panel p-6 shadow-2xl overscroll-contain">
             <h3 className="mb-5 font-display text-base font-semibold text-foreground">
-              {prefillData ? `Dupliquer — ${prefillData.name ?? "Campagne"}` : "Nouvelle campagne"}
+              {prefillData ? `Dupliquer : ${prefillData.name ?? "Campagne"}` : "Nouvelle campagne"}
             </h3>
             <form key={prefillData?.id ?? "new"} action={handleCreateCampaign} className="space-y-4">
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -1039,9 +1039,9 @@ export default function ProspectsClient({
                   <label className="mb-2 block text-xs font-medium text-text-muted">Niveau de relation</label>
                   <div className="space-y-2">
                     {[
-                      { value: "2,3", label: "2e et 3e degré", desc: "Amis d'amis + inconnus — le plus large panel.", recommended: true },
-                      { value: "2",   label: "2e degré uniquement", desc: "Contacts de tes contacts — taux d'acceptation plus élevé." },
-                      { value: "3",   label: "3e degré et +", desc: "Inconnus hors de ton réseau — volume maximal." },
+                      { value: "2,3", label: "2e et 3e degré", desc: "Amis d'amis + inconnus, le plus large panel.", recommended: true },
+                      { value: "2",   label: "2e degré uniquement", desc: "Contacts de tes contacts, taux d'acceptation plus élevé." },
+                      { value: "3",   label: "3e degré et +", desc: "Inconnus hors de ton réseau, volume maximal." },
                     ].map(({ value, label, desc, recommended }) => (
                       <label key={value} className="flex cursor-pointer items-start gap-2.5 rounded-md border border-border bg-panel-raised px-3 py-2.5 hover:border-accent/30">
                         <input type="radio" name="network_distance" value={value} defaultChecked={(prefillData?.query_params?.network_distance as string ?? "2,3") === value} className="mt-0.5 shrink-0" />
@@ -1056,7 +1056,7 @@ export default function ProspectsClient({
                 </div>
                 <div>
                   <label className="mb-1.5 block text-xs font-medium text-text-muted">Nombre de profils à cibler</label>
-                  <input type="number" name="target_count" min={1} max={5000} defaultValue={prefillData?.target_count ?? 500} className="w-full rounded-md border border-border bg-panel-raised px-3 py-2 text-sm text-foreground outline-none focus:border-accent/50" />
+                  <input type="number" name="target_count" min={1} max={500} defaultValue={prefillData?.target_count ?? 500} className="w-full rounded-md border border-border bg-panel-raised px-3 py-2 text-sm text-foreground outline-none focus:border-accent/50" />
                 </div>
               </div>
               <div>

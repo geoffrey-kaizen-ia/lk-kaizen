@@ -3,7 +3,31 @@
 Journal chronologique des sessions de travail. Le plus recent en haut.
 Pour la vue d'ensemble par phases, voir [ROADMAP.md](./ROADMAP.md).
 
+## 2026-06-30 — Audit de l'audit Cyrano (maj 29-30/06) + 14 corrections UI
+
+### Audit de l'audit : croisement doc Cyrano vs code reel
+- Methode : 4 agents de verification en parallele (Lot 1 wizard, Lot 2 reglages, Lot 3 prospects, Lot 4 stats/relances) + lecture des JSON n8n. Bilan : ~25 points deja faits confirmes (dont le socle invitations deja a 20 partout, le CLAUDE.md disant "25" est obsolete), 14 corrections reelles, 7 arbitrages produit.
+- 3 questions "moteur" de Geoffrey tranchees par le code : (1) le cron plafonne les invitations ENVOYEES (`quotaRestant = daily_invite_limit - sentToday`), pas les acceptees ; (2) le compteur "Messages aujourd'hui" reflete deja la valeur reglee (`daily_message_limit`, pas le socle 40 fige) -> le constat "desalignement" de l'audit est infonde ; (3) l'icebreaker (1er message) respecte deja delai + creneaux (`scheduled_send_at` calcule avec active_hours/days/response_delay/timezone).
+
+### 14 corrections appliquees (tsc --noEmit OK, NON commitees)
+- P0 : tirets longs (—) remplaces par `:`/`,` dans 6 libelles affiches ; "Ce que l'agent propose" rendu obligatoire (asterisque + validation `fmMissing`) en proposition directe.
+- P1 : mot "prompt" retire de l'UI client (phrase wizard "Tu pourras tout relire…" + erreur modale de test) ; titre de mode de-duplique ("Comment veux-tu ouvrir la conversation ?") ; etape morte a option unique sautee pour le client standard (+ retour cohérent vers "type") ; avertissement "Conversation activee sans prise de contact en amont" ; bloc "Sante du compte" dans Stats (invitations en attente / 500, jauge a etats colores vert/orange/rouge).
+- P2 forme : reaccentuation complete de l'ecran Reglages (titre "Reglages"->"Réglages" + tout SettingsClient), de la modale de test (TestAgentModal) et de la box "Comprendre les agents" ; titre "Comprendre les agents" de-capitalise (suppression `uppercase tracking-[0.2em]`) ; exemples d'accroche passes en tutoiement ; "Criteres de disqualification (optionnel)".
+- Retour Nicolas en cours de session : plafond de profils par campagne corrige de 5000 a 500 (validation serveur + message + `max` du champ).
+- Point ouvert (reporte volontairement) : alerte chute du taux d'acceptation + similarite des messages (sante compte v2).
+- Point ouvert (arbitrages produit a trancher) : longueur de l'agent conversation, coherence de voix (avertissement vs voix partagee), compteur 4 messages vs relances, relances par campagne vs par client, filtre taille d'entreprise, reactivation reseau 1er degre (V2), injection des posts.
+- Point ouvert : commit unique + deploiement Vercel de ces 14 corrections pas encore poussés (attente validation visuelle).
+
 ## 2026-06-30 — Scission du workflow Icebreaker en deux (n8n) + documentation
+
+### Debug envois Icebreaker bloqués (WF « Schedule envoie message » `HdUkHiDzT9gpTvgV`)
+- Symptôme : 2 prospects connectés (Lola, Jacques) ne recevaient aucun icebreaker (0 ligne `lk_messages`). Trois bugs empilés trouvés.
+- Bug crash `Update Prospect` : `22007 invalid input syntax for timestamp ""`. Cause : les champs `scheduled_send_at`/`pending_reply` étaient laissés sans valeur → n8n envoie `""`, refusé par le type timestamptz. Fix (Nicolas, live) : valeur `{{ null }}`.
+- Bug « 1 sur 2 » : la branche « déjà contacté » (`Update Prospect1`) était un cul-de-sac, ne rebouclait pas sur `Loop Over Items` → la boucle s'arrêtait au 1er prospect (le 2e restait verrouillé en `processing`). Fix (Nicolas, live) : câbler `Update Prospect1` → `Loop Over Items`.
+- Bug filtre NULL : `Get Prospects` filtre `processing_status != processing`, mais en SQL `NULL != 'processing'` ne vaut pas vrai (logique 3 valeurs) → les prospects nés à `NULL` étaient exclus (ni le cron d'invitations ni l'icebreaker ne posent `processing_status`). Lola + Jacques débloqués à la main (`NULL`/`processing` → `idle`).
+- Faux positif dédup élucidé : un chat peut exister sans icebreaker délivré. Cas Lola : `/chats/{id}/messages` montre 1 seul message `deleted:1` (envoyé 07:44 puis supprimé) → le dédup basé sur l'existence du chat la classait « déjà contactée » à tort.
+- Endpoint Unipile `/chat_attendees/{attendee_id}/chats` (filtre par prospect, absent de la doc) exploré puis **abandonné** : il renvoie un **404 « Attendee not found »** quand le prospect n'a aucun chat → trop de plomberie (sortie erreur à câbler). Revenu au design d'origine (lister `/chats?account_id` + match `attendee_provider_id === linkedin_id` en code).
+- Points ouverts : (1) poser un défaut `'idle'` sur `lk_prospects.processing_status` (sinon les nouveaux prospects renaissent `NULL` et sont re-exclus) ; (2) ajouter l'endpoint `/chat_attendees/{attendee_id}/chats` à `docs/unipile/messaging.md` ; (3) le dédup ne distingue toujours pas un chat vide / message supprimé d'un vrai échange ; (4) re-export sanitizé de `icebreaker-message.json` (changements live `{{ null }}` + câblage `Update Prospect1`→`Loop`) ; clé Unipile en dur (fuitée) toujours à régénérer.
 
 ### Alignement test agent ↔ prod icebreaker (le test ne testait pas la prod)
 - Diagnostic : le message du test dashboard (« Générer le message ») diverge totalement de celui envoyé en prod. Cause racine : **deux moteurs différents**. Le test tourne le `prompt_content` de l'agent client (wizard) ; la prod n8n (nœud `Claude - Icebreaker`) tourne un prompt « V1.2 VERROUILLÉE » codé en dur qui **ignore** `prompt_content`. Le nœud `Supabase - Prompt icebreaker` lit l'agent mais son résultat n'était jamais injecté. Conséquence : la config wizard du client n'avait aucun effet sur l'icebreaker réellement envoyé.
@@ -44,6 +68,30 @@ Pour la vue d'ensemble par phases, voir [ROADMAP.md](./ROADMAP.md).
 - Fenêtre de test : la croix ✕ remplacée par un bouton texte explicite **"← Revenir à la création de l'agent"** (depuis le wizard) / "← Fermer" (depuis la liste des agents). Corrige le sentiment de blocage dans la modale de test. (`TestAgentModal.tsx`, `TestFirstMessageModal.tsx`)
 - Test de l'agent conversationnel : ajout du bloc **"Charger un vrai profil"** (URL LinkedIn → remplit Poste depuis le headline, Résumé depuis l'à-propos via `scrapeLinkedInProfile`), comme en mode prise de contact. (`TestAgentModal.tsx`)
 - Validé `tsc --noEmit` OK + testé en live par Nicolas (les 3 points OK) avant commit. ESLint non configuré sur le projet → le build Vercel ne bloque pas dessus, tsc reste le garde-fou. Commit ciblé sur les 3 fichiers ; autres changements en cours (n8n/docs) laissés intacts.
+
+### Bug doublon icebreaker : collision INSERT sur lk_prospects (corrigé live)
+- Symptôme : erreur 23505 `lk_prospects_account_id_linkedin_id_key` sur le nœud `Supabase - Creer prospect1` du WF Icebreaker « Invitation acceptée » (`0yQOYs1Ffiqtj4IX`) à l'acceptation d'une invitation (Christophe de Cheffontaines, client Karine `YIKlrU-VRTG4_VyElJMheg`).
+- Cause racine (timestamps en base) : le **cron d'invitations crée désormais la ligne `lk_prospects` en `status=invited`** au moment de l'envoi de l'invit (07:17, 20 prospects ce matin). À l'acceptation, l'icebreaker tentait un **INSERT** d'une 2e ligne `connected` pour la même paire `(account_id, linkedin_id)` → collision. Ce n'était donc PAS un doublon d'événement mais un conflit de responsabilité entre deux workflows.
+- **Fix (appliqué live par Nicolas)** : nœud `Supabase - Creer prospect1` passé de `create` → **`update`**, avec 2 conditions de match (`account_id eq` + `linkedin_id eq`). La ligne `invited` existante est mise à jour en `connected` + `pending_reply` + `scheduled_send_at`. Vérifié en base : Christophe repassé `connected`, message en file, conditions d'envoi toutes réunies.
+- Point ouvert : l'export `docs/n8n/cron-invitations-scraping.json` (29/06) ne montre PAS cette création de prospect → **le cron live a divergé, à ré-exporter** (piège « date d'export » du README confirmé).
+
+### Revue garde-fous Conversation + défaut « conversation » à l'inscription
+- **Confirmé** (export `conversation.json` du 29/06) : un client sans `conversation` dans `allowed_roles` ne reçoit AUCUNE réponse IA. Le nœud `Switch - Agent type` teste `allowed_roles.includes('conversation')` ; sinon il route vers la branche scoring seule (aucun `pending_reply` écrit, aucun envoi). Vérifié pour Karine (`allowed_roles = {icebreaker,intent}`). Nuance : l'étage d'envoi (`Get many rows`) ne revérifie pas les rôles, mais la branche conversation ne met jamais rien en file pour elle → sûr.
+- **Point d'attention découvert** : à l'inscription, le trigger DB `handle_new_user` crée bien la ligne `lk_clients_config` (`user_id`, `email`, `is_active=false`) mais **ne précise pas `allowed_roles`** → la colonne prend son défaut `{icebreaker,conversation,intent}`. Donc **conversation est ACTIVÉ par défaut** pour tout nouveau client (l'inverse de l'attendu). Karine n'a conversation off que parce que Geoffrey l'a retiré à la main.
+- Doc à corriger : `CLAUDE.md` affirme « le signup ne crée PAS la ligne » → **périmé**, le trigger la crée (Geoffrey complète juste `account_id`/`is_active` ensuite).
+- Point ouvert (décision Nicolas) : passer le défaut de `allowed_roles` à `{icebreaker,intent}` (migration sur le défaut de colonne, n'affecte pas les clients existants) pour que conversation soit OFF par défaut.
+
+### LOT 4 Conversation (Mode B) — parsing + routage câblés et validés (WF `fsSw8bIknV1cAgKx`)
+- Cron d'envoi : `Get many rows` ramassait TOUS les `pending_reply` (collision avec le WF d'envoi icebreaker, file `lk_prospects` partagée). Filtre `status = in_conversation` + `processing_status = idle` ajouté → cron scopé. Appliqué par Nicolas.
+- `Code - Extraire reponse1` réécrit : parse le JSON Mode B (`message`/`etat`/`raison_handover`/`enjeu_detecte`/`cta_propose`), isole le bloc `{...}`, filet `catch` rétro-compatible (texte brut = message). Avant il prenait le texte brut → risquait d'envoyer le JSON entier au prospect. Testé OK.
+- Routage dans `Update a row1` (Option A, handover silencieux retenu) : `pending_reply`/`scheduled_send_at` posés seulement si `!handover && message non vide`, sinon `null` ; nouveau champ `ai_enabled = handover ? false : true`. Testé bout en bout : un `rendre_la_main` met bien la fiche en `ai_enabled=false`, file vidée.
+- Découverte : les `{{ }}` d'un prompt système chargé depuis la base ne sont PAS interprétés par n8n (date `{{ $now }}` + compteur partaient en texte brut à Claude ; nom de node faux en plus). Règle : plomberie dans le prompt USER, jamais dans le système. Mémo gardé.
+
+### Setup de test agent Conversation + points ouverts
+- Test monté sur le compte de Nicolas (`1tGd`) : agent conversation copié + assigné ; prospects Geoffrey Cuberos (fil pourri de 72 messages → handover, normal) et Valentin GICQUIAUD (fil propre) créés. Confirmé : le `chat_id` est PAR COMPTE, et le WF matche le prospect par `chat_id` (`Supabase - Prospect1`).
+- Point ouvert : tester le message normal qui part vraiment (simu Valentin non terminée, manque de temps).
+- Point ouvert : compteur `maxMessages` déterministe (node n8n) PAS fait ; relances PAS regardées (export WF Relance `tSXHBrq1Kti67qYx` absent du repo) ; colonne `handover_reason` (badge CRM « IA arrêtée + raison ») optionnelle non faite.
+- Point ouvert : migrer l'agent prod « Agent 1 » de Geoffrey (`BY85`, encore ancien format texte + placeholders `{{ }}` morts) en Mode B. Nettoyage : supprimer fiches/agent de test (prospect Geoffrey `9e9f00bd`, Valentin `e818c6bc`, agent test `3fc71567` + son assignation conversation sur `1tGd`).
 
 ## 2026-06-29 — Audit builder agents vs 24 questions Geoffrey (méta-prompt + base de connaissance)
 

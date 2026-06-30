@@ -44,8 +44,8 @@ export async function createCampaign(formData: FormData) {
 
   if (!name) return { error: "Le nom de la campagne est obligatoire." };
   if (!keywords) return { error: "Les mots-cles sont obligatoires." };
-  if (!Number.isFinite(targetCount) || targetCount < 1 || targetCount > 5000) {
-    return { error: "L'objectif doit etre entre 1 et 5000 profils." };
+  if (!Number.isFinite(targetCount) || targetCount < 1 || targetCount > 500) {
+    return { error: "Le nombre de profils doit etre entre 1 et 500." };
   }
 
   const queryHash = createHash("sha256")

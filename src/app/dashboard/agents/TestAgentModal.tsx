@@ -55,15 +55,15 @@ const ETAT_LABELS: Record<AgentEtat, string> = {
   proposer_cta: "Propose l'invitation",
   rendre_la_main: "Passe la main",
   parker: "Met en pause",
-  clore: "Clot la conversation",
+  clore: "Clôt la conversation",
 };
 
 const RAISON_LABELS: Record<string, string> = {
   demande_humain: "le prospect demande un humain",
   agacement: "agacement du prospect",
   mise_en_cause_ia: "le prospect met en cause l'IA",
-  hors_scope: "question hors de portee",
-  coordonner_cta: "accord obtenu, a coordonner",
+  hors_scope: "question hors de portée",
+  coordonner_cta: "accord obtenu, à coordonner",
   doute: "cas douteux",
 };
 
@@ -121,7 +121,7 @@ export default function TestAgentModal({
     const text = input.trim();
     if (!text || loading) return;
     if (!agent.prompt_content) {
-      setError("Cet agent n'a pas de prompt configure.");
+      setError("Cet agent n'est pas encore configuré.");
       return;
     }
 
@@ -155,7 +155,7 @@ export default function TestAgentModal({
     });
 
     if (result.error || !result.reply) {
-      setError(result.error ?? "Reponse vide");
+      setError(result.error ?? "Réponse vide");
       setLoading(false);
       return;
     }
@@ -194,8 +194,8 @@ export default function TestAgentModal({
         : null;
       const note =
         parsed.etat === "clore"
-          ? "L'agent clot la conversation, aucun message envoye."
-          : `L'agent passe la main en silence, aucun message envoye${raison ? ` (${raison})` : ""}. ${agent.name ?? "Tu"} reprends l'echange.`;
+          ? "L'agent clôt la conversation, aucun message envoyé."
+          : `L'agent passe la main en silence, aucun message envoyé${raison ? ` (${raison})` : ""}. ${agent.name ?? "Tu"} reprends l'échange.`;
       setMessages((prev) => [
         ...prev,
         {
@@ -230,8 +230,8 @@ export default function TestAgentModal({
               Tester {agent.name ?? "l'agent"}
             </h2>
             <p className="mt-0.5 text-xs text-text-muted">
-              Simulation : rien n&apos;est enregistre, tes vrais prospects ne
-              sont pas affectes.
+              Simulation : rien n&apos;est enregistré, tes vrais prospects ne
+              sont pas affectés.
             </p>
           </div>
           <button
@@ -245,7 +245,7 @@ export default function TestAgentModal({
         {/* Profil prospect simule */}
         <details className="border-b border-border px-5 py-3">
           <summary className="cursor-pointer font-display text-xs text-text-muted hover:text-foreground">
-            Profil du prospect simule (optionnel)
+            Profil du prospect simulé (optionnel)
           </summary>
           {/* Chargement depuis un vrai profil LinkedIn (comme la prise de contact) */}
           <div className="mt-3 rounded-md border border-border bg-panel-raised px-3 py-3">
@@ -302,12 +302,12 @@ export default function TestAgentModal({
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium text-text-muted">
-                Resume
+                Résumé
               </label>
               <input
                 value={resume}
                 onChange={(e) => setResume(e.target.value)}
-                placeholder="Ex: 10 ans d'experience en gestion d'equipe"
+                placeholder="Ex: 10 ans d'expérience en gestion d'équipe"
                 className="w-full rounded-md border border-border-strong bg-panel-raised px-2.5 py-1.5 text-sm text-foreground focus:border-accent focus:outline-none"
               />
             </div>
@@ -318,8 +318,8 @@ export default function TestAgentModal({
         <div className="flex-1 overflow-y-auto px-5 py-4">
           {messages.length === 0 && (
             <p className="py-8 text-center text-sm text-text-muted">
-              Ecris un message comme si tu etais le prospect, l&apos;agent te
-              repondra comme il le ferait en vrai.
+              Écris un message comme si tu étais le prospect, l&apos;agent te
+              répondra comme il le ferait en vrai.
             </p>
           )}
           <div className="space-y-2">
@@ -398,7 +398,7 @@ export default function TestAgentModal({
             disabled={messages.length === 0 || loading}
             className="shrink-0 rounded-md border border-border-strong px-3 py-2 text-xs text-text-muted hover:bg-panel-raised hover:text-foreground disabled:opacity-50"
           >
-            Reinitialiser
+            Réinitialiser
           </button>
           <input
             value={input}
@@ -409,7 +409,7 @@ export default function TestAgentModal({
                 handleSend();
               }
             }}
-            placeholder="Message du prospect simule..."
+            placeholder="Message du prospect simulé..."
             disabled={loading}
             className="flex-1 rounded-md border border-border-strong bg-panel-raised px-3 py-2 text-sm text-foreground focus:border-accent focus:outline-none disabled:opacity-50"
           />

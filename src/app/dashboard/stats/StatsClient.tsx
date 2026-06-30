@@ -37,6 +37,8 @@ const STATUS_LABELS: Record<string, string> = {
 export default function StatsClient({
   period,
   status,
+  pendingInvites,
+  pendingInviteLimit,
   totalInvitesSent,
   totalMessagesSent,
   totalAccepted,
@@ -55,6 +57,8 @@ export default function StatsClient({
 }: {
   period: string;
   status: string;
+  pendingInvites: number;
+  pendingInviteLimit: number;
   totalInvitesSent: number;
   totalMessagesSent: number;
   totalAccepted: number;
@@ -85,6 +89,16 @@ export default function StatsClient({
     const query = params.toString();
     router.push(query ? `${pathname}?${query}` : pathname);
   }
+
+  const pendingRatio = pendingInviteLimit > 0 ? pendingInvites / pendingInviteLimit : 0;
+  const healthAccent = pendingRatio >= 0.85 ? "danger" : pendingRatio >= 0.6 ? "warning" : "positive";
+  const healthStyle = ACCENT_STYLES[healthAccent];
+  const healthMessage =
+    pendingRatio >= 0.85
+      ? "Seuil critique : ralentis les envois ou retire des invitations en attente."
+      : pendingRatio >= 0.6
+        ? "Niveau à surveiller."
+        : "Marge confortable.";
 
   const evolutionData = periods.map((c) => ({
     name: c.weekStartLabel,
@@ -123,6 +137,28 @@ export default function StatsClient({
             </option>
           ))}
         </select>
+      </div>
+
+      {/* Santé du compte */}
+      <div className="mb-6">
+        <p className="mb-3 font-display text-xs font-semibold text-text-dim">
+          Santé du compte
+        </p>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="relative overflow-hidden rounded-lg border border-border bg-panel px-5 py-5">
+            <span className={`absolute inset-x-0 top-0 h-0.5 ${healthStyle.bar}`} />
+            <p className="mb-2 font-display text-xs font-medium text-text-dim">
+              Invitations en attente
+            </p>
+            <p className={`font-display tabular-nums text-4xl font-semibold ${healthStyle.text} ${healthStyle.glow}`}>
+              {pendingInvites}
+              <span className="text-lg font-medium text-text-dim"> / {pendingInviteLimit}</span>
+            </p>
+            <p className="mt-2 text-[11px] leading-relaxed text-text-dim">
+              Invitations envoyées non encore acceptées. LinkedIn plafonne le total en attente autour de {pendingInviteLimit} : au-delà, les nouvelles invitations risquent d&apos;être bloquées. {healthMessage}
+            </p>
+          </div>
+        </div>
       </div>
 
       {/* Résultats */}
@@ -344,6 +380,7 @@ const ACCENT_STYLES = {
   accent: { text: "text-accent", bar: "bg-accent", glow: "shadow-[0_0_18px_-6px_var(--accent)]" },
   positive: { text: "text-positive", bar: "bg-positive", glow: "shadow-[0_0_18px_-6px_var(--positive)]" },
   warning: { text: "text-warning", bar: "bg-warning", glow: "shadow-[0_0_18px_-6px_var(--warning)]" },
+  danger: { text: "text-danger", bar: "bg-danger", glow: "shadow-[0_0_18px_-6px_var(--danger)]" },
   muted: { text: "text-foreground", bar: "bg-text-dim", glow: "" },
 } as const;
 

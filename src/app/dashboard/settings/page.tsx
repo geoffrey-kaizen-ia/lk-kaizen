@@ -20,10 +20,10 @@ export default async function SettingsPage() {
   return (
     <div>
       <h1 className="mb-1 font-display text-xl font-semibold tracking-tight text-foreground">
-        Reglages
+        Réglages
       </h1>
       <p className="mb-6 text-sm text-text-muted">
-        Cadence et securite du compte LinkedIn.
+        Cadence et sécurité du compte LinkedIn.
       </p>
       <SettingsClient
         dailyInviteLimit={config?.daily_invite_limit ?? 20}

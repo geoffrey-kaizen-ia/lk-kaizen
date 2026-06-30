@@ -322,6 +322,8 @@ export default function AgentWizard({
     if (!fmForm.userName.trim()) m.push("Ton nom");
     if (!fmForm.businessName.trim()) m.push("Nom de ton entreprise");
     if (!fmForm.businessDescription.trim()) m.push("Description de ton activité");
+    if (agentType === "icebreaker" && fmForm.structureMessage === "proposition_directe" && !fmForm.cta.trim())
+      m.push("Ce que l'agent propose");
     return m;
   }
 
@@ -341,7 +343,12 @@ export default function AgentWizard({
             disabled={!canConversation}
             onClick={() => {
               setAgentType("conversation");
-              setStep("choice");
+              if (canEditPrompt) {
+                setStep("choice");
+              } else {
+                setStep("form");
+                setFormStep(1);
+              }
             }}
             className="w-full rounded-lg border border-positive/30 bg-positive/10 p-4 text-left transition-colors hover:border-positive/50 disabled:opacity-50 disabled:cursor-not-allowed"
           >
@@ -421,7 +428,7 @@ export default function AgentWizard({
         >
           <p className="text-sm font-semibold text-foreground">Formulaire guidé (recommandé)</p>
           <p className="mt-0.5 text-xs text-text-muted">
-            On te pose des questions étape par étape pour rassembler le maximum d&apos;infos sur ton offre, ta cible et tes objections. Plus tu remplis, meilleur sera ton agent. Tu pourras relire le prompt avant de créer l&apos;agent.
+            On te pose des questions étape par étape pour rassembler le maximum d&apos;infos sur ton offre, ta cible et tes objections. Plus tu remplis, meilleur sera ton agent. Tu pourras tout relire avant de créer l&apos;agent.
           </p>
         </button>
         <div className="mt-5 flex items-center justify-between">
@@ -468,7 +475,7 @@ export default function AgentWizard({
     return (
       <div>
         <p className="mb-1 text-base font-semibold text-foreground">
-          Quel type d&apos;agent veux-tu créer ?
+          Comment veux-tu ouvrir la conversation ?
         </p>
         <p className="mb-4 text-xs text-text-muted">
           Dans les deux cas, l&apos;agent lit le profil du prospect et personnalise chaque message à partir d&apos;un élément réel. Ce qui change, c&apos;est la façon d&apos;ouvrir.
@@ -544,7 +551,7 @@ export default function AgentWizard({
           {agentType === "icebreaker" && fmForm.structureMessage && (
             <>
               {" "}
-              &mdash;{" "}
+              :{" "}
               <span className="text-text-muted">
                 {STRUCTURE_MESSAGE_LABELS[fmForm.structureMessage].title}
               </span>
@@ -603,6 +610,7 @@ export default function AgentWizard({
         {agentType === "icebreaker" && fmForm.structureMessage === "proposition_directe" && (
           <TextAreaField
             label="Ce que l'agent propose"
+            required
             value={fmForm.cta}
             onChange={(v) => updateFmField("cta", v)}
             placeholder="L'invitation à faible engagement que l'agent proposera au prospect. Ex : un échange de quinze minutes, une invitation à un petit-déjeuner découverte, un audit offert. Reste léger, jamais un argumentaire de vente."
@@ -1239,7 +1247,7 @@ export default function AgentWizard({
             placeholder="Ex: Travaille déjà dans la vente"
           />
           <ListField
-            label="Critères de disqualification"
+            label="Critères de disqualification (optionnel)"
             helper="Si le prospect correspond à l'un de ces points, on arrête poliment."
             items={form.disqualificationCriteria}
             onAdd={() => addListItem("disqualificationCriteria")}
@@ -1248,7 +1256,7 @@ export default function AgentWizard({
             placeholder="Ex: Étudiant sans activité"
           />
           <ListField
-            label="A ne jamais dire ni promettre (optionnel)"
+            label="À ne jamais dire ni promettre (optionnel)"
             helper="Garde-fous : choses que l'agent ne doit jamais affirmer ou promettre."
             items={form.neverSay}
             onAdd={() => addListItem("neverSay")}
@@ -1308,7 +1316,7 @@ export default function AgentWizard({
             formStep === 1
               ? isEdit
                 ? onCancel()
-                : setStep("choice")
+                : setStep(canEditPrompt ? "choice" : "type")
               : setFormStep(formStep - 1);
           }}
           className="rounded-md border border-border-strong px-4 py-2 text-sm text-text-muted hover:bg-panel-raised hover:text-foreground"

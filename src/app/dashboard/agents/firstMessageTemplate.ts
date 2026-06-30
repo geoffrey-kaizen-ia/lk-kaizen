@@ -71,18 +71,18 @@ export const STRUCTURE_MESSAGE_LABELS: Record<
   { title: string; description: string; example: string }
 > = {
   diagnostic: {
-    title: "Agent diagnostic — ouvre par une question",
+    title: "Agent diagnostic : ouvre par une question",
     description:
       "Après l'accroche personnalisée, l'agent pose une vraie question sur ton terrain d'expertise, sans rien proposer ni vendre. Le prospect réagit de lui-même, et tu reprends la main dès sa première réponse. L'approche sûre par défaut : tu ne brusques personne et tu vois qui s'intéresse avant d'engager.",
     example:
-      "Bonjour Camille, j'ai trouvé très juste votre publication sur la tarification au juste prix dans le podcast Inde. Comment vous abordez la prospection de votre côté, c'est quelque chose que vous avez rodé ou que vous faites au gré des occasions ?",
+      "Bonjour Camille, j'ai trouvé très juste ta publication sur la tarification au juste prix dans le podcast Inde. Comment tu abordes la prospection de ton côté, c'est quelque chose que tu as rodé ou que tu fais au gré des occasions ?",
   },
   proposition_directe: {
-    title: "Agent proposition directe — propose ton invitation d'emblée",
+    title: "Agent proposition directe : propose ton invitation d'emblée",
     description:
       "Après la même accroche personnalisée, l'agent se présente en une phrase et propose l'invitation que tu as définie : un échange, un petit-déjeuner découverte, un audit. Le tri va vite, le prospect dit oui ou non, et tu reprends la main sur un oui. À choisir quand ta cible reconnaît déjà son besoin ou répond bien aux approches franches.",
     example:
-      "Bonjour Camille, j'ai trouvé très juste votre publication sur la tarification au juste prix dans le podcast Inde. J'accompagne justement des consultants sur leur prospection régulière. Ça vous dirait qu'on prenne quinze minutes pour voir comment vous vous y prenez aujourd'hui ?",
+      "Bonjour Camille, j'ai trouvé très juste ta publication sur la tarification au juste prix dans le podcast Inde. J'accompagne justement des consultants sur leur prospection régulière. Ça te dirait qu'on prenne quinze minutes pour voir comment tu t'y prends aujourd'hui ?",
   },
 };
 

@@ -16,15 +16,15 @@ import RangeSlider from "./RangeSlider";
 const DELAY_LABELS: Record<DelayMode, { label: string; desc: string }> = {
   rapide: {
     label: "Rapide",
-    desc: "A reserver aux comptes bien etablis.",
+    desc: "À réserver aux comptes bien établis.",
   },
   normal: {
     label: "Normal",
-    desc: "Delai humanise standard, recommande pour la plupart des comptes.",
+    desc: "Délai humanisé standard, recommandé pour la plupart des comptes.",
   },
   lent: {
     label: "Lent",
-    desc: "Reponses plus espacees, recommande pour les comptes recents ou en rodage.",
+    desc: "Réponses plus espacées, recommandé pour les comptes récents ou en rodage.",
   },
 };
 
@@ -121,13 +121,13 @@ export default function SettingsClient({
           Cadence quotidienne
         </h2>
         <p className="mt-1 text-xs text-text-dim">
-          Plafonds journaliers pour proteger ton compte LinkedIn. Tu peux baisser ces
-          valeurs, jamais depasser le plafond socle.
+          Plafonds journaliers pour protéger ton compte LinkedIn. Tu peux baisser ces
+          valeurs, jamais dépasser le plafond socle.
         </p>
 
         <div className="mt-5 grid grid-cols-1 gap-6 sm:grid-cols-2">
           <RangeSlider
-            label="Invitations envoyees / jour"
+            label="Invitations envoyées / jour"
             name="daily_invite_limit"
             value={inviteLimit}
             min={1}
@@ -152,11 +152,11 @@ export default function SettingsClient({
       {/* Delai de reponse */}
       <section className="rounded-md border border-border bg-panel p-5">
         <h2 className="font-display text-sm font-semibold text-text-muted">
-          Delai de reponse
+          Délai de réponse
         </h2>
         <p className="mt-1 text-xs text-text-dim">
-          Temps d&apos;attente avant l&apos;envoi automatique d&apos;une reponse, pour
-          rester credible.
+          Temps d&apos;attente avant l&apos;envoi automatique d&apos;une réponse, pour
+          rester crédible.
         </p>
 
         <div className="mt-4 space-y-2">
@@ -193,9 +193,9 @@ export default function SettingsClient({
         </div>
 
         <p className="mt-3 text-xs text-text-muted">
-          Reponses envoyees entre{" "}
+          Réponses envoyées entre{" "}
           <span className="font-medium text-foreground">{preset.min}</span> et{" "}
-          <span className="font-medium text-foreground">{preset.max}</span> minutes apres
+          <span className="font-medium text-foreground">{preset.max}</span> minutes après
           le message du prospect.
         </p>
       </section>
@@ -203,18 +203,18 @@ export default function SettingsClient({
       {/* Creneaux de reponse */}
       <section className="rounded-md border border-border bg-panel p-5">
         <h2 className="font-display text-sm font-semibold text-text-muted">
-          Creneaux de reponse
+          Créneaux de réponse
         </h2>
         <p className="mt-1 text-xs text-text-dim">
-          Plage horaire et jours pendant lesquels l&apos;IA repond. Hors de ces creneaux,
-          les reponses sont mises en file et envoyees au prochain creneau ouvert (pas de
-          reponse le week-end si non coche).
+          Plage horaire et jours pendant lesquels l&apos;IA répond. Hors de ces créneaux,
+          les réponses sont mises en file et envoyées au prochain créneau ouvert (pas de
+          réponse le week-end si non coché).
         </p>
 
         <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
           <div>
             <label className="mb-1.5 block text-xs font-medium text-text-muted">
-              Heure de debut
+              Heure de début
             </label>
             <select
               name="active_hours_start"
@@ -296,7 +296,7 @@ export default function SettingsClient({
       </section>
 
       {error && <p className="text-sm text-danger">{error}</p>}
-      {saved && !error && <p className="text-sm text-positive">Reglages enregistres.</p>}
+      {saved && !error && <p className="text-sm text-positive">Réglages enregistrés.</p>}
 
       <button
         type="submit"

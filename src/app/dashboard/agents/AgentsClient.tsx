@@ -82,7 +82,7 @@ const ROLES = [
     key: "conversation",
     label: "Conversation",
     longDesc:
-      "C'est l'agent qui discute avec tes prospects une fois la conversation engagee : il relance, repond aux questions, qualifie et amene vers ton objectif. C'est lui qui gere TOUS les echanges, message apres message.",
+      "C'est l'agent qui discute avec tes prospects une fois la conversation engagée : il relance, répond aux questions, qualifie et amène vers ton objectif. C'est lui qui gère TOUS les échanges, message après message.",
     iconColor: "text-positive",
     icon: (
       <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
@@ -94,7 +94,7 @@ const ROLES = [
     key: "relance",
     label: "Relance",
     longDesc:
-      "Message envoye automatiquement quand un prospect ne repond pas. Utilise la variable {{first_name}} pour personnaliser. Le message est fixe, pas d'IA.",
+      "Message envoyé automatiquement quand un prospect ne répond pas. Utilise la variable {{first_name}} pour personnaliser. Le message est fixe, pas d'IA.",
     iconColor: "text-warning",
     icon: (
       <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
@@ -492,7 +492,7 @@ export default function AgentsClient({
     <div>
       {/* Explication des 3 types d'agents */}
       <section className="mb-8 rounded-lg border border-border bg-panel p-5">
-        <h2 className="mb-1 font-display text-xs font-semibold uppercase tracking-[0.2em] text-text-muted">
+        <h2 className="mb-1 font-display text-sm font-semibold text-foreground">
           Comprendre les agents
         </h2>
         <p className="mb-4 text-sm text-text-muted">
@@ -751,6 +751,14 @@ export default function AgentsClient({
                         </option>
                       ))}
                     </select>
+                    {key === "conversation" &&
+                      isEnabled &&
+                      hasAssignment &&
+                      !(ibEnabled && (ibMode === "ai" ? !!assignmentMap["icebreaker"] : ibMode === "template")) && (
+                        <p className="text-xs text-warning">
+                          Aucune prise de contact n&apos;est activée en amont. La conversation n&apos;aura pas de premier message à enchaîner tant que tu n&apos;auras pas activé l&apos;Icebreaker.
+                        </p>
+                      )}
                   </div>
                 ) : (
                   <p className="text-xs text-text-dim">Non inclus dans ton forfait actuel.</p>
@@ -1011,7 +1019,7 @@ export default function AgentsClient({
                         Message de relance
                       </label>
                       <p className="mb-2 text-xs text-text-dim">
-                        Tu peux personnaliser ton message avec le prenom du prospect. Clique sur la variable pour l&apos;inserer — Kaizen la remplacera automatiquement au moment de l&apos;envoi.
+                        Tu peux personnaliser ton message avec le prenom du prospect. Clique sur la variable pour l&apos;inserer : Kaizen la remplacera automatiquement au moment de l&apos;envoi.
                       </p>
                       <div className="mb-2 flex flex-wrap gap-1">
                         {IB_VARIABLES.map((v) => (

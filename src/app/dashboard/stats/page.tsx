@@ -54,6 +54,10 @@ export default async function StatsPage({
   const allProspects = prospects ?? [];
   const allMessages = messages ?? [];
 
+  // Santé du compte : invitations en attente (état live, tout l'historique, hors filtre période)
+  const PENDING_INVITE_LIMIT = 500; // cap LinkedIn approximatif sur le total en attente
+  const pendingInvites = allProspects.filter((p) => p.status === "invited").length;
+
   // Filtre periode : date de coupure basee sur created_at / sent_at
   const cutoff =
     period === "all"
@@ -164,6 +168,8 @@ export default async function StatsPage({
       <StatsClient
         period={period}
         status={status}
+        pendingInvites={pendingInvites}
+        pendingInviteLimit={PENDING_INVITE_LIMIT}
         totalInvitesSent={totalInvitesSent}
         totalMessagesSent={totalMessagesSent}
         totalAccepted={totalAccepted}
