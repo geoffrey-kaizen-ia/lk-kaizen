@@ -22,10 +22,12 @@ export default function TestFirstMessageModal({
   agent,
   agentTypeLabel,
   onClose,
+  backLabel = "Fermer",
 }: {
   agent: { id: string; name: string | null; prompt_content: string | null };
   agentTypeLabel: string;
   onClose: () => void;
+  backLabel?: string;
 }) {
   const [linkedinUrl, setLinkedinUrl] = useState("");
   const [scraping, setScraping] = useState(false);
@@ -109,10 +111,9 @@ export default function TestFirstMessageModal({
           </div>
           <button
             onClick={onClose}
-            className="text-text-muted hover:text-foreground"
-            aria-label="Fermer"
+            className="shrink-0 rounded-md border border-border-strong px-3 py-1.5 text-xs text-text-muted hover:bg-panel-raised hover:text-foreground"
           >
-            &#x2715;
+            &#x2190; {backLabel}
           </button>
         </div>
 

@@ -126,6 +126,10 @@ export default function AgentWizard({
     agentType: "conversation" | "icebreaker" | "invitation_recue";
   } | null>(null);
 
+  // Affiche le bandeau rouge des champs obligatoires manquants quand on tente
+  // d'avancer sans les avoir remplis (le bouton n'est plus simplement grise).
+  const [stepError, setStepError] = useState(false);
+
   // Modale de test partagee par tous les ecrans du wizard. Chaque etape a son
   // propre return : sans ce rendu commun, cliquer "Tester" sur l'ecran de
   // previsualisation mettait a jour le state mais n'affichait aucune modale.
@@ -134,12 +138,14 @@ export default function AgentWizard({
       <TestAgentModal
         agent={{ id: "test", name: testingAgent.name, prompt_content: testingAgent.prompt_content }}
         onClose={() => setTestingAgent(null)}
+        backLabel="Revenir à la création de l'agent"
       />
     ) : (
       <TestFirstMessageModal
         agent={{ id: "test", name: testingAgent.name, prompt_content: testingAgent.prompt_content }}
         agentTypeLabel={testingAgent.agentType === "icebreaker" ? "Prise de contact" : "Invitation reçue"}
         onClose={() => setTestingAgent(null)}
+        backLabel="Revenir à la création de l'agent"
       />
     )
   );
@@ -165,12 +171,6 @@ export default function AgentWizard({
   function removeFmStyleExample(index: number) {
     setFmForm((prev) => ({ ...prev, styleExamples: prev.styleExamples.filter((_, i) => i !== index) }));
   }
-
-  const fmFormValid =
-    fmForm.userName.trim() &&
-    fmForm.businessName.trim() &&
-    fmForm.businessDescription.trim() &&
-    (agentType !== "icebreaker" || fmForm.sujetLegitimite.trim());
 
   useEffect(() => {
     if (step !== "generating") return;
@@ -279,6 +279,50 @@ export default function AgentWizard({
     if (formStep === 2) return Boolean(step2Valid);
     if (formStep === 3) return Boolean(step3Valid);
     return true;
+  }
+
+  // Liste lisible des champs obligatoires manquants pour une etape de l'agent
+  // conversationnel (sert au bandeau d'erreur rouge).
+  function conversationMissing(s: number): string[] {
+    const m: string[] = [];
+    if (s === 1) {
+      if (!form.userName.trim()) m.push("Ton nom");
+      if (!form.businessName.trim()) m.push("Nom de ton entreprise");
+      if (!form.businessDescription.trim()) m.push("Description de ton activité");
+      if (!form.objectifDescription.trim()) m.push("Ce que l'agent propose");
+    } else if (s === 2) {
+      if (!form.offerDescription.trim()) m.push("Offre principale");
+      if (!form.problemSolved.trim()) m.push("Problème que tu résous");
+      if (!form.idealClient.trim()) m.push("Client idéal (ICP)");
+    } else if (s === 3) {
+      if (!form.objections.some((o) => o.objection.trim())) m.push("Au moins une objection");
+      if (!form.proofPoints.some((p) => p.trim())) m.push("Au moins une preuve & résultat");
+    }
+    return m;
+  }
+
+  // Premiere etape (1 a 3) ayant un champ obligatoire manquant, ou null si tout est rempli.
+  function firstIncompleteStep(): number | null {
+    for (const s of [1, 2, 3]) {
+      if (conversationMissing(s).length > 0) return s;
+    }
+    return null;
+  }
+
+  function goToFormStep(n: number) {
+    setStepError(false);
+    setFormStep(n);
+  }
+
+  // Champs obligatoires manquants du formulaire court "premier message".
+  function fmMissing(): string[] {
+    const m: string[] = [];
+    if (agentType === "icebreaker" && !fmForm.sujetLegitimite.trim())
+      m.push("Sur quel sujet engager la conversation");
+    if (!fmForm.userName.trim()) m.push("Ton nom");
+    if (!fmForm.businessName.trim()) m.push("Nom de ton entreprise");
+    if (!fmForm.businessDescription.trim()) m.push("Description de ton activité");
+    return m;
   }
 
   // --- ECRAN TYPE D'AGENT ---
@@ -649,10 +693,18 @@ export default function AgentWizard({
           rows={3}
         />
 
+        {stepError && fmMissing().length > 0 && (
+          <p className="rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
+            Remplis les champs obligatoires avant de continuer : {fmMissing().join(", ")}.
+          </p>
+        )}
         <div className="flex items-center justify-between gap-3 border-t border-border pt-4">
           <button
             type="button"
-            onClick={() => (isEdit ? onCancel() : setStep(agentType === "icebreaker" ? "fm_mode" : "type"))}
+            onClick={() => {
+              setStepError(false);
+              isEdit ? onCancel() : setStep(agentType === "icebreaker" ? "fm_mode" : "type");
+            }}
             className="rounded-md border border-border-strong px-4 py-2 text-sm text-text-muted hover:bg-panel-raised hover:text-foreground"
           >
             Retour
@@ -667,8 +719,14 @@ export default function AgentWizard({
             </button>
             <button
               type="button"
-              disabled={!fmFormValid}
-              onClick={() => setStep("fm_generating")}
+              onClick={() => {
+                if (fmMissing().length > 0) {
+                  setStepError(true);
+                  return;
+                }
+                setStepError(false);
+                setStep("fm_generating");
+              }}
               className="rounded-md border border-accent/30 bg-accent/10 px-4 py-2 text-sm font-medium text-accent transition-colors hover:bg-accent/20 disabled:opacity-50"
             >
               {canEditPrompt ? "Générer le prompt" : "Créer l'agent"}
@@ -896,7 +954,7 @@ export default function AgentWizard({
           <div key={s.key} className="flex-1">
             <button
               type="button"
-              onClick={() => setFormStep(s.key)}
+              onClick={() => goToFormStep(s.key)}
               className={`h-1.5 w-full rounded-full transition-colors ${
                 s.key <= formStep ? "bg-accent" : "bg-border"
               }`}
@@ -1234,17 +1292,25 @@ export default function AgentWizard({
         </div>
       )}
 
+      {/* Bandeau d'erreur champs obligatoires */}
+      {stepError && conversationMissing(formStep).length > 0 && (
+        <p className="rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">
+          Remplis les champs obligatoires avant de continuer : {conversationMissing(formStep).join(", ")}.
+        </p>
+      )}
+
       {/* Navigation */}
       <div className="flex items-center justify-between gap-3 border-t border-border pt-4">
         <button
           type="button"
-          onClick={() =>
+          onClick={() => {
+            setStepError(false);
             formStep === 1
               ? isEdit
                 ? onCancel()
                 : setStep("choice")
-              : setFormStep(formStep - 1)
-          }
+              : setFormStep(formStep - 1);
+          }}
           className="rounded-md border border-border-strong px-4 py-2 text-sm text-text-muted hover:bg-panel-raised hover:text-foreground"
         >
           {formStep === 1 ? "Retour" : "Précédent"}
@@ -1260,18 +1326,34 @@ export default function AgentWizard({
           {formStep < 5 ? (
             <button
               type="button"
-              disabled={!canGoNext()}
-              onClick={() => setFormStep(formStep + 1)}
-              className="rounded-md border border-accent/30 bg-accent/10 px-4 py-2 text-sm font-medium text-accent transition-colors hover:bg-accent/20 disabled:opacity-50"
+              onClick={() => {
+                if (!canGoNext()) {
+                  setStepError(true);
+                  return;
+                }
+                setStepError(false);
+                setFormStep(formStep + 1);
+              }}
+              className="rounded-md border border-accent/30 bg-accent/10 px-4 py-2 text-sm font-medium text-accent transition-colors hover:bg-accent/20"
             >
               Suivant
             </button>
           ) : (
             <button
               type="button"
-              disabled={!step1Valid || !step2Valid || !step3Valid}
-              onClick={handleGenerate}
-              className="rounded-md border border-accent/30 bg-accent/10 px-4 py-2 text-sm font-medium text-accent transition-colors hover:bg-accent/20 disabled:opacity-50"
+              onClick={() => {
+                const incomplete = firstIncompleteStep();
+                if (incomplete !== null) {
+                  // On ramene l'utilisateur sur la premiere etape incomplete,
+                  // ou le bandeau rouge precisera les champs manquants.
+                  setFormStep(incomplete);
+                  setStepError(true);
+                  return;
+                }
+                setStepError(false);
+                handleGenerate();
+              }}
+              className="rounded-md border border-accent/30 bg-accent/10 px-4 py-2 text-sm font-medium text-accent transition-colors hover:bg-accent/20"
             >
               {canEditPrompt ? "Générer le prompt" : "Créer l'agent"}
             </button>

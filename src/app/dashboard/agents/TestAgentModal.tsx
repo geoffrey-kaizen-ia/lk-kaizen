@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { testAgentReply } from "./actions";
+import { testAgentReply, scrapeLinkedInProfile } from "./actions";
 
 type AgentEtat =
   | "continuer"
@@ -80,9 +80,11 @@ type ChatMessage = {
 export default function TestAgentModal({
   agent,
   onClose,
+  backLabel = "Fermer",
 }: {
   agent: { id: string; name: string | null; prompt_content: string | null };
   onClose: () => void;
+  backLabel?: string;
 }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
@@ -91,7 +93,25 @@ export default function TestAgentModal({
   const [entreprise, setEntreprise] = useState("");
   const [poste, setPoste] = useState("");
   const [resume, setResume] = useState("");
+  const [linkedinUrl, setLinkedinUrl] = useState("");
+  const [scraping, setScraping] = useState(false);
+  const [scrapeError, setScrapeError] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  async function handleScrape() {
+    if (!linkedinUrl.trim() || scraping) return;
+    setScraping(true);
+    setScrapeError(null);
+    const result = await scrapeLinkedInProfile(linkedinUrl.trim());
+    if (result.error) {
+      setScrapeError(result.error);
+    } else {
+      // Le scrape renvoie headline / about : on les mappe sur poste / resume.
+      if (result.headline) setPoste(result.headline);
+      if (result.about) setResume(result.about);
+    }
+    setScraping(false);
+  }
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -216,10 +236,9 @@ export default function TestAgentModal({
           </div>
           <button
             onClick={onClose}
-            className="text-text-muted hover:text-foreground"
-            aria-label="Fermer"
+            className="shrink-0 rounded-md border border-border-strong px-3 py-1.5 text-xs text-text-muted hover:bg-panel-raised hover:text-foreground"
           >
-            &#x2715;
+            &#x2190; {backLabel}
           </button>
         </div>
 
@@ -228,6 +247,36 @@ export default function TestAgentModal({
           <summary className="cursor-pointer font-display text-xs text-text-muted hover:text-foreground">
             Profil du prospect simule (optionnel)
           </summary>
+          {/* Chargement depuis un vrai profil LinkedIn (comme la prise de contact) */}
+          <div className="mt-3 rounded-md border border-border bg-panel-raised px-3 py-3">
+            <p className="mb-2 text-xs font-medium text-text-muted">Charger un vrai profil</p>
+            <div className="flex gap-2">
+              <input
+                value={linkedinUrl}
+                onChange={(e) => {
+                  setLinkedinUrl(e.target.value);
+                  setScrapeError(null);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    handleScrape();
+                  }
+                }}
+                placeholder="https://linkedin.com/in/prenom-nom"
+                className="flex-1 rounded-md border border-border-strong bg-panel px-2.5 py-1.5 text-xs text-foreground focus:border-accent focus:outline-none"
+              />
+              <button
+                type="button"
+                onClick={handleScrape}
+                disabled={scraping || !linkedinUrl.trim()}
+                className="shrink-0 rounded-md border border-accent/30 bg-accent/10 px-3 py-1.5 text-xs font-medium text-accent transition-colors hover:bg-accent/20 disabled:opacity-50"
+              >
+                {scraping ? "..." : "Charger"}
+              </button>
+            </div>
+            {scrapeError && <p className="mt-1.5 text-xs text-danger">{scrapeError}</p>}
+          </div>
           <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div>
               <label className="mb-1 block text-xs font-medium text-text-muted">
