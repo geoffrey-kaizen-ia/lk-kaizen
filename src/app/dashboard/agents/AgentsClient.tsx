@@ -656,7 +656,7 @@ export default function AgentsClient({
                                   onClick={() => insertIbVariable(v.label)}
                                   className="rounded border border-accent/30 bg-accent/10 px-1.5 py-0.5 font-mono text-[10px] text-accent hover:bg-accent/20"
                                 >
-                                  + {v.label}
+                                  {v.label}
                                 </button>
                               ))}
                             </div>
@@ -1022,7 +1022,7 @@ export default function AgentsClient({
                             title={v.desc}
                             className="rounded border border-accent/30 bg-accent/10 px-1.5 py-0.5 font-mono text-[10px] text-accent hover:bg-accent/20"
                           >
-                            + {v.label}
+                            {v.label}
                           </button>
                         ))}
                       </div>
@@ -1249,7 +1249,7 @@ function RelanceCard({
                   title={v.desc}
                   className="rounded border border-accent/30 bg-accent/10 px-1.5 py-0.5 font-mono text-[10px] text-accent hover:bg-accent/20"
                 >
-                  + {v.label}
+                  {v.label}
                 </button>
               ))}
             </div>
