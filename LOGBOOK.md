@@ -17,6 +17,11 @@ Pour la vue d'ensemble par phases, voir [ROADMAP.md](./ROADMAP.md).
 - Point ouvert : confirmer l'intervalle réel du `Schedule Trigger` (l'export n'a pas de valeur explicite → 1 min par défaut côté n8n ; Nicolas évoque 5 min). À vérifier dans l'UI puis préciser la doc.
 - Constaté (en dur côté n8n) : la clé Unipile `X-API-KEY` du WF d'envoi est tapée en dur, pas en credential → rejoint le chantier rotation déjà ouvert.
 
+### Clôture dossier icebreaker (revue des exports avec Nicolas)
+- Vérifié dans `docs/n8n/icebreaker-message.json` (`HdUkHiDzT9gpTvgV`) que les 2 garde-fous sont bien câblés et à jour : (1) anti-doublon via `Unipile - Chats du compte` → `Deja un chat ?` → `déja contacté` (skip si chat existant) ; (2) `Update Prospect` (branche envoi) filtré par `id eq {{ Loop Over Items.id }}` → ne met à jour qu'UNE ligne (avant : pas de filtre sur l'id, il mettait plusieurs prospects à jour d'un coup) + écrit le vrai `chat_id` du retour Unipile.
+- **Dossier icebreaker (anti-doublon + update unitaire) clôturé** côté code/docs. Reste un nettoyage mineur côté Nicolas : re-test Anthony + suppression fiche test (id `3062d60e-…`).
+- Distinction reposée (pour ne pas confondre) : le mismark multi-tenant du CRON d'invitations (`Marquer invite` encore par `account_id+provider_id` dans l'export, pas par `id`) est un point ouvert DISTINCT, non bloquant tant qu'on reste en validation manuelle. Reste tracé en Phase 4 (bugs WF Scrapping).
+
 ### Corrections wizard agents (retours spontanés Geoffrey) — commit `6b6f43c`, poussé/déployé
 - Champs obligatoires : le bouton "Suivant"/"Créer l'agent" était simplement grisé sans explication ("je clique, rien ne se passe"). Désormais cliquable + **bandeau rouge** listant nommément les champs manquants, sur les 2 formulaires (conversationnel ET prise de contact). Sur le bouton final, renvoi automatique vers la première étape incomplète. (`AgentWizard.tsx`)
 - Fenêtre de test : la croix ✕ remplacée par un bouton texte explicite **"← Revenir à la création de l'agent"** (depuis le wizard) / "← Fermer" (depuis la liste des agents). Corrige le sentiment de blocage dans la modale de test. (`TestAgentModal.tsx`, `TestFirstMessageModal.tsx`)
