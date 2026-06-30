@@ -5,6 +5,23 @@ Pour la vue d'ensemble par phases, voir [ROADMAP.md](./ROADMAP.md).
 
 ## 2026-06-30 — Scission du workflow Icebreaker en deux (n8n) + documentation
 
+### Alignement test agent ↔ prod icebreaker (le test ne testait pas la prod)
+- Diagnostic : le message du test dashboard (« Générer le message ») diverge totalement de celui envoyé en prod. Cause racine : **deux moteurs différents**. Le test tourne le `prompt_content` de l'agent client (wizard) ; la prod n8n (nœud `Claude - Icebreaker`) tourne un prompt « V1.2 VERROUILLÉE » codé en dur qui **ignore** `prompt_content`. Le nœud `Supabase - Prompt icebreaker` lit l'agent mais son résultat n'était jamais injecté. Conséquence : la config wizard du client n'avait aucun effet sur l'icebreaker réellement envoyé.
+- Trois divergences identifiées (pas que le prompt) : (1) prompt système, (2) format de sortie (test attend du JSON `{message,accroche,profil_insuffisant}`, prod prenait `content[0].text` brut), (3) données injectées (test : à-propos + expériences + posts ; prod : headline + entreprise + posts seulement).
+- Décision (validée avec Geoffrey) : source de vérité unique = `prompt_content` du wizard. La prod doit tourner le prompt client, pas le V1.2.
+- Vérif couverture base avant bascule : seul compte actif en mode `ai` = Geoffrey (`BY85po44…`, `prompt_content` rempli, 17k). Les 2 autres comptes actifs sont en mode `template` (branche Claude jamais atteinte) → bascule sûre.
+- **Code (fait, commité)** : `firstMessageTemplate.ts` → nouvelle fonction partagée `buildProspectUserMessage` (contrat canonique de l'entrée prospect, à reproduire à l'identique dans n8n). `actions.ts` `testFirstMessage` → utilise ce format, **supprime le `TEST_OVERRIDE`** (le test tourne désormais le prompt client brut, comme la prod), `max_tokens` figé à 600. `tsc --noEmit` OK.
+- Point ouvert : **modifs n8n pas encore appliquées** (à faire en live dans l'UI, branche `ai` du WF `0yQOYs1Ffiqtj4IX`) : (1) `Code - Resume profil` → émettre `user_message` au format canonique ; (2) `Claude - Icebreaker` → System = `prompt_content`, Message = `user_message`, max tokens 600 ; (3) `Edit Fields1` → `JSON.parse(...).message`. Tant que ce n'est pas fait, test ≠ prod (le code shippé rend juste le test fidèle au futur comportement).
+- Point ouvert (optionnel) : ajouter un garde-fou IF `profil_insuffisant` côté n8n pour ne rien envoyer si le JSON le signale.
+
+### Bug prénom icebreaker mode template : `{{first_name}}` jamais remplacé
+- Symptôme : en mode template, le 1er message partait avec le placeholder brut (`Bonjour +{{first_name}},`). Diagnostic : aucun nœud n8n ne substituait la variable, et le nœud `Edit Fields` ne sort que `message` (donc `$json.user_full_name` est `undefined` plus loin).
+- **Cause racine du `+`** : ce n'était pas une faute de frappe client. Les boutons d'insertion de variables du dashboard affichaient `+ {{first_name}}` (le `+` voulait dire « ajouter », mais se lisait comme partie de la variable et était recopié dans le message). Fix : `+` retiré des 3 boutons (icebreaker + 2 zones relances) → le bouton affiche exactement `{{first_name}}`. `tsc --noEmit` OK. Commit `8e3ea6d` poussé/déployé. (`AgentsClient.tsx`)
+- Donnée corrigée en base : `lk_clients_config.icebreaker_template` du client Karine (`YIKlrU-VRTG4_VyElJMheg`) nettoyé (`+{{first_name}}` → `{{first_name}}`).
+- n8n WF Icebreaker « Invitation acceptée » (`0yQOYs1Ffiqtj4IX`), nœud `Code in JavaScript1` : ajout de la substitution `{{first_name}}`/`{{last_name}}` (+ variantes `+{{…}}` en filet de sécurité), prénom dérivé de `$('Switch').first().json.full_name` (1er mot). Testé live (Jacques Roulleau → « Bonjour Jacques, »). OK.
+- Point ouvert : re-export sanitizé du WF Icebreaker à refaire (`.n8n-raw/` → `sanitize.mjs`) pour que `docs/n8n/icebreaker-invitation.json` reflète le nouveau `Code in JavaScript1`.
+- Point ouvert : `actions.ts` + `firstMessageTemplate.ts` (refacto du mode test agent, WIP antérieur) restent non commités, volontairement laissés hors de ce push.
+
 ### Icebreaker découpé : détection vs envoi
 - Nicolas a scindé l'Icebreaker unique en deux workflows n8n, pour garder un log d'exécutions lisible (le schedule sur les minutes noyait le journal des invitations acceptées).
 - `0yQOYs1Ffiqtj4IX` (garde l'ID, renommé "Invitation acceptée") : webhook `unipile-new-relation`, génère l'icebreaker (Claude) et crée le prospect avec le texte en attente. N'envoie plus.

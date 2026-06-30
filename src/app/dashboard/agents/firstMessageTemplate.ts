@@ -1,3 +1,25 @@
+// Format canonique des donnees prospect envoyees au modele pour le premier
+// message (icebreaker). CONTRAT PARTAGE avec le workflow n8n Icebreaker
+// (0yQOYs1Ffiqtj4IX, noeud "Code - Resume profil" -> "Claude - Icebreaker") :
+// n8n DOIT produire EXACTEMENT cette meme chaine en entree du modele, sinon le
+// test du dashboard et la prod divergent meme a prompt identique.
+//
+// Le champ `about` agrege, dans cet ordre : resume/a-propos du profil, puis
+// "Localisation : ...", puis "Experiences :" (3 max, "Role @ Entreprise"), puis
+// "Derniers posts :" (3 max, tronques a 280 caracteres). Voir
+// scrapeLinkedInProfile() dans actions.ts pour l'assemblage de reference.
+export function buildProspectUserMessage(p: {
+  firstName: string;
+  headline: string;
+  about: string;
+}): string {
+  const lines: string[] = [];
+  lines.push(`Nom complet : ${p.firstName.trim() || "(inconnu)"}`);
+  if (p.headline.trim()) lines.push(`Headline : ${p.headline.trim()}`);
+  if (p.about.trim()) lines.push(`A-propos : ${p.about.trim()}`);
+  return `Voici les donnees du profil LinkedIn du prospect :\n\n${lines.join("\n")}`;
+}
+
 export type FirstMessageAgentType = "icebreaker" | "invitation_recue";
 export type StructureMessage = "diagnostic" | "proposition_directe";
 export type LongueurAccroche = "court" | "moyen";
