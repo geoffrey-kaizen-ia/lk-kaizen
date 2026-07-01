@@ -13,6 +13,7 @@ const out = (partial: Partial<AgentOutput>): AgentOutput => ({
 
 const scenario = (assertions: SecurityScenario["assertions"]): SecurityScenario => ({
   id: "T1",
+  dbId: "00000000-0000-4000-8000-000000000001",
   category: "T1",
   title: "test",
   scripted_messages: ["msg"],
