@@ -23,6 +23,23 @@ async function getAccountId() {
   return data?.account_id ?? null;
 }
 
+// Previent n8n qu'un agent doit passer le crash test. Fire and forget :
+// une panne du webhook ne doit jamais casser l'action appelante.
+async function triggerCrashTest(agentId: string, trigger: "create" | "manual") {
+  const url = process.env.N8N_CRASH_TEST_URL;
+  if (!url) return;
+  try {
+    await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ agent_id: agentId, trigger }),
+      cache: "no-store",
+    });
+  } catch {
+    // ignore : le crash test pourra etre relance manuellement
+  }
+}
+
 export async function createAgent(formData: FormData) {
   const supabase = await createClient();
   const accountId = await getAccountId();
@@ -38,16 +55,41 @@ export async function createAgent(formData: FormData) {
     }
   }
 
-  const { error } = await supabase.from("lk_agents").insert({
-    account_id: accountId,
-    name: formData.get("name") as string,
-    objectif: (formData.get("objectif") as string) || null,
-    prompt_content: (formData.get("prompt_content") as string) || null,
-    knowledge_base: knowledgeBase,
-    is_active: true,
-  });
+  const { data: created, error } = await supabase
+    .from("lk_agents")
+    .insert({
+      account_id: accountId,
+      name: formData.get("name") as string,
+      objectif: (formData.get("objectif") as string) || null,
+      prompt_content: (formData.get("prompt_content") as string) || null,
+      knowledge_base: knowledgeBase,
+      is_active: true,
+    })
+    .select("id")
+    .single();
 
   if (error) return { error: error.message };
+  if (created) await triggerCrashTest(created.id, "create");
+  revalidatePath("/dashboard/agents");
+  return { error: null };
+}
+
+export async function relaunchCrashTest(agentId: string) {
+  const supabase = await createClient();
+  const accountId = await getAccountId();
+  if (!accountId) return { error: "Compte non configure" };
+
+  // Verifie que l'agent appartient bien au client connecte avant de declencher.
+  const { data: agent } = await supabase
+    .from("lk_agents")
+    .select("id")
+    .eq("id", agentId)
+    .eq("account_id", accountId)
+    .maybeSingle();
+
+  if (!agent) return { error: "Agent introuvable" };
+
+  await triggerCrashTest(agentId, "manual");
   revalidatePath("/dashboard/agents");
   return { error: null };
 }
