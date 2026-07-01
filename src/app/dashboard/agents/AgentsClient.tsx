@@ -339,6 +339,22 @@ export default function AgentsClient({
     assignments.map((a) => [a.role, a.is_enabled])
   );
 
+  // Pilot-4 : divergence de ton entre l'agent Prise de contact (mode IA) et
+  // l'agent Conversation. V1 = simple avertissement dans Roles actifs, pas de blocage.
+  const voiceMismatch = (() => {
+    const ibAgentId = assignmentMap["icebreaker"];
+    const convAgentId = assignmentMap["conversation"];
+    if (!ibAgentId || !convAgentId) return false;
+    if (!(ibEnabled && ibMode === "ai")) return false;
+    if (!(enabledMap["conversation"] ?? true)) return false;
+    const ib = activeAgents.find((a) => a.id === ibAgentId);
+    const conv = activeAgents.find((a) => a.id === convAgentId);
+    if (!ib || !conv) return false;
+    const tu = (a: Agent) => (a.knowledge_base ?? {}).tutoiement === true;
+    const relax = (a: Agent) => (a.knowledge_base ?? {}).styleDecontracte === true;
+    return tu(ib) !== tu(conv) || relax(ib) !== relax(conv);
+  })();
+
   function openCreate() {
     setEditingAgent(null);
     setEditingWizardAgent(null);
@@ -759,6 +775,11 @@ export default function AgentsClient({
                           Aucune prise de contact n&apos;est activée en amont. La conversation n&apos;aura pas de premier message à enchaîner tant que tu n&apos;auras pas activé la Prise de contact.
                         </p>
                       )}
+                    {key === "conversation" && voiceMismatch && (
+                      <p className="text-xs text-warning">
+                        Le ton de ta prise de contact et celui de ta conversation diffèrent (tutoiement ou style d&apos;écriture). Le prospect peut avoir l&apos;impression de changer d&apos;interlocuteur entre le premier message et la suite.
+                      </p>
+                    )}
                   </div>
                 ) : (
                   <p className="text-xs text-text-dim">Non inclus dans ton forfait actuel.</p>
@@ -815,7 +836,13 @@ export default function AgentsClient({
         {activeAgents.map((agent) => {
           const assignedRoles = ROLES.filter(
             (r) => assignmentMap[r.key] === agent.id
-          ).map((r) => r.label);
+          ).map((r) => ({
+            label: r.label,
+            enabled:
+              r.key === "icebreaker"
+                ? ibEnabled && ibMode === "ai"
+                : enabledMap[r.key] ?? true,
+          }));
           return (
             <AgentCard
               key={agent.id}
@@ -1365,7 +1392,7 @@ function AgentCard({
   canEditPrompt,
 }: {
   agent: Agent;
-  assignedRoles: string[];
+  assignedRoles: { label: string; enabled: boolean }[];
   onEdit: (a: Agent) => void;
   onDuplicate: (id: string) => void;
   onArchive: (id: string) => void;
@@ -1397,10 +1424,15 @@ function AgentCard({
             </h2>
             {assignedRoles.map((r) => (
               <span
-                key={r}
-                className="rounded border border-accent/30 bg-accent/10 px-2 py-0.5 font-display text-[10px] font-medium uppercase tracking-wider text-accent"
+                key={r.label}
+                className={`rounded border px-2 py-0.5 font-display text-[10px] font-medium uppercase tracking-wider ${
+                  r.enabled
+                    ? "border-positive/30 bg-positive/10 text-positive"
+                    : "border-border-strong bg-panel-raised text-text-dim"
+                }`}
+                title={r.enabled ? `Role ${r.label} actif` : `Role ${r.label} en pause`}
               >
-                {r}
+                {r.enabled ? `Actif · ${r.label}` : `${r.label} · en pause`}
               </span>
             ))}
           </div>
