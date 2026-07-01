@@ -576,7 +576,27 @@ export default function AgentsClient({
                         {label}
                       </p>
                     </div>
-                    {!isAllowed && (
+                    {isAllowed ? (
+                      // Interrupteur global de la carte : coupe la prise de contact quel que
+                      // soit le mode (Agent IA ou message fixe). OFF -> handleIbDisable
+                      // (icebreaker_enabled=false, respecte par les 2 workflows n8n). ON ->
+                      // reactive le dernier mode choisi.
+                      <button
+                        type="button"
+                        disabled={ibSaving}
+                        onClick={() => (ibEnabled ? handleIbDisable() : handleIbBlockActivate(ibMode))}
+                        title={ibEnabled ? "Desactiver la prise de contact" : "Activer la prise de contact"}
+                        className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors focus:outline-none disabled:cursor-not-allowed disabled:opacity-40 ${
+                          ibEnabled ? "bg-accent" : "bg-border-strong"
+                        }`}
+                      >
+                        <span
+                          className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-sm transition-transform ${
+                            ibEnabled ? "translate-x-4" : "translate-x-0"
+                          }`}
+                        />
+                      </button>
+                    ) : (
                       <span className="rounded border border-border-strong px-1.5 py-0.5 font-display text-[9px] font-medium uppercase tracking-wider text-text-dim">
                         Forfait
                       </span>
@@ -584,7 +604,12 @@ export default function AgentsClient({
                   </div>
 
                   {isAllowed ? (
-                    <div className="space-y-2">
+                    <div className={`space-y-2 transition-opacity ${ibEnabled ? "" : "opacity-50"}`}>
+                      {!ibEnabled && (
+                        <p className="text-xs text-text-dim">
+                          Prise de contact desactivee : aucun premier message ne part. Choisis un mode ou active l&apos;interrupteur pour la relancer.
+                        </p>
+                      )}
 
                       {/* Option Agent IA */}
                       <div className={`rounded-md border p-3 transition-colors ${aiActive ? "border-accent/30 bg-accent/5" : "border-border"}`}>

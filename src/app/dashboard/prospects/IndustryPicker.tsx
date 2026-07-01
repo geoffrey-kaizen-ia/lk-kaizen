@@ -82,7 +82,7 @@ export default function IndustryPicker({
               setOpen(true);
             }}
             onFocus={() => query.trim().length >= 2 && setOpen(true)}
-            placeholder="Tape un secteur : banque, informatique, agro..."
+            placeholder="banque, informatique, agro..."
             autoComplete="off"
             className="w-full rounded-md border border-border bg-panel-raised px-3 py-2 text-sm text-foreground outline-none focus:border-accent/50"
           />
@@ -108,8 +108,8 @@ export default function IndustryPicker({
           )}
         </>
       )}
-      <p className="mt-1 text-xs text-text-dim">
-        Choisis un secteur officiel LinkedIn. Laisse vide pour ne pas filtrer.
+      <p className="mt-1 text-[11px] text-text-dim">
+        Réduit fortement les résultats. À laisser vide pour un métier précis.
       </p>
     </div>
   );

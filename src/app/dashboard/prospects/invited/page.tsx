@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
 import InvitedFilters from "./InvitedFilters";
+import LinkedInLink from "../LinkedInLink";
 
 const PAGE_SIZE = 50;
 
@@ -26,7 +27,7 @@ export default async function InvitedPage({
   let query = supabase
     .from("lk_search_results")
     .select(
-      "id, search_id, full_name, headline, location, current_company, sent_at, created_at",
+      "id, search_id, provider_id, full_name, headline, location, current_company, sent_at, created_at",
       { count: "exact" }
     )
     .eq("status", "invited")
@@ -109,7 +110,10 @@ export default async function InvitedPage({
                 {results.map((r) => (
                   <tr key={r.id} className="hover:bg-panel-raised">
                     <td className="px-4 py-3">
-                      <p className="font-medium text-foreground">{r.full_name ?? "—"}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="font-medium text-foreground">{r.full_name ?? "—"}</p>
+                        <LinkedInLink providerId={r.provider_id} />
+                      </div>
                       {r.location && (
                         <p className="text-xs text-text-dim">{r.location}</p>
                       )}

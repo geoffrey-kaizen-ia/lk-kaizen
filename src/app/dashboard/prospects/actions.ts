@@ -48,25 +48,34 @@ export async function createCampaign(formData: FormData) {
     return { error: "Le nombre de profils doit etre entre 1 et 500." };
   }
 
+  // Le secteur fait partie de l'identite de la recherche : deux campagnes qui ne
+  // different que par le secteur doivent avoir des hash distincts.
   const queryHash = createHash("sha256")
-    .update(`${accountId}:${keywords}:${location ?? ""}:${networkDistance ?? ""}`)
+    .update(`${accountId}:${keywords}:${location ?? ""}:${networkDistance ?? ""}:${industryId ?? ""}`)
     .digest("hex")
     .slice(0, 16);
 
   const supabase = await createClient();
+  // Relancer une campagne aux criteres identiques reprend la meme ligne (et son
+  // curseur de pagination) au lieu de violer la contrainte UNIQUE (account_id, query_hash).
+  // On omet volontairement total_scraped / total_sent / last_cursor : sur une reprise ils
+  // sont preserves (curseur = on continue les profils suivants), sur une creation ils
+  // prennent leur defaut (0 / null).
   const { data: campaign, error } = await supabase
     .from("lk_searches")
-    .insert({
-      account_id: accountId,
-      name,
-      query_hash: queryHash,
-      query_params: { keywords, keywords_list: keywordsList, location, network_distance: networkDistance, industry, industry_id: industryId },
-      target_count: targetCount,
-      mode,
-      status: "active",
-      total_scraped: 0,
-      total_sent: 0,
-    })
+    .upsert(
+      {
+        account_id: accountId,
+        name,
+        query_hash: queryHash,
+        query_params: { keywords, keywords_list: keywordsList, location, network_distance: networkDistance, industry, industry_id: industryId },
+        target_count: targetCount,
+        mode,
+        status: "active",
+        exhausted: false,
+      },
+      { onConflict: "account_id,query_hash" }
+    )
     .select("id")
     .single();
 

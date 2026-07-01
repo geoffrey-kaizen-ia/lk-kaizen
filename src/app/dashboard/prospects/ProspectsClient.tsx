@@ -15,6 +15,7 @@ import {
 } from "./actions";
 import IndustryPicker from "./IndustryPicker";
 import TitlePicker from "./TitlePicker";
+import LinkedInLink from "./LinkedInLink";
 
 // Reconstruit la liste des titres à partir des query_params d'une campagne à
 // dupliquer : on lit d'abord keywords_list (nouveau format), sinon on retombe
@@ -588,7 +589,10 @@ export default function ProspectsClient({
                   return (
                     <tr key={r.id} className="hover:bg-panel-raised">
                       <td className="px-4 py-3">
-                        <p className="font-medium text-foreground">{r.full_name ?? "—"}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium text-foreground">{r.full_name ?? "—"}</p>
+                          <LinkedInLink providerId={r.provider_id} />
+                        </div>
                         {r.headline && <p className="max-w-xs truncate text-xs text-text-dim">{r.headline}</p>}
                       </td>
                       <td className="px-4 py-3 text-xs text-text-muted">{campaign?.name ?? "—"}</td>
@@ -711,6 +715,7 @@ export default function ProspectsClient({
                             </p>
                           )}
                         </div>
+                        <LinkedInLink providerId={r.provider_id} className="p-1" />
                         <button
                           type="button"
                           onClick={() => handleIgnore(r.id)}
@@ -778,7 +783,10 @@ export default function ProspectsClient({
                     return (
                       <tr key={r.id} className="hover:bg-panel-raised">
                         <td className="px-4 py-3">
-                          <p className="font-medium text-foreground">{r.full_name ?? "—"}</p>
+                          <div className="flex items-center gap-2">
+                            <p className="font-medium text-foreground">{r.full_name ?? "—"}</p>
+                            <LinkedInLink providerId={r.provider_id} />
+                          </div>
                           {r.headline && <p className="max-w-xs truncate text-xs text-text-dim">{r.headline}</p>}
                         </td>
                         <td className="px-4 py-3 text-xs text-text-muted">{campaign?.name ?? "—"}</td>
@@ -1029,7 +1037,20 @@ export default function ProspectsClient({
                   <input type="text" name="location" placeholder="Ex : Paris, Lyon, France" defaultValue={(prefillData?.query_params?.location as string) ?? ""} className="w-full rounded-md border border-border bg-panel-raised px-3 py-2 text-sm text-foreground outline-none focus:border-accent/50" />
                 </div>
                 <div>
-                  <label className="mb-1.5 block text-xs font-medium text-text-muted">Secteur d&apos;activité</label>
+                  <label className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-text-muted">
+                    Secteur d&apos;activité
+                    <span className="group relative inline-flex">
+                      <span
+                        className="inline-flex h-3.5 w-3.5 cursor-help items-center justify-center rounded-full border border-text-dim/50 text-[9px] font-semibold text-text-dim"
+                        aria-label="À propos du filtre secteur"
+                      >
+                        i
+                      </span>
+                      <span className="pointer-events-none absolute left-1/2 top-5 z-30 hidden w-56 -translate-x-1/2 rounded-md border border-border bg-panel px-2.5 py-1.5 text-[11px] font-normal leading-snug text-text-muted shadow-lg group-hover:block">
+                        Filtre réducteur : beaucoup de profils ne renseignent pas leur secteur sur LinkedIn. À laisser vide si tu cibles un métier précis (le poste suffit).
+                      </span>
+                    </span>
+                  </label>
                   <IndustryPicker
                     defaultId={(prefillData?.query_params?.industry_id as string) ?? null}
                     defaultLabel={(prefillData?.query_params?.industry as string) ?? null}

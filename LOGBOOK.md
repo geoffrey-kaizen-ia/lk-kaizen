@@ -3,6 +3,85 @@
 Journal chronologique des sessions de travail. Le plus recent en haut.
 Pour la vue d'ensemble par phases, voir [ROADMAP.md](./ROADMAP.md).
 
+## 2026-07-01 — Icebreaker mode template débloqué + toggle Prise de contact + garde-fous IA
+
+### WF Icebreaker « Invitation acceptée » : blocage en mode template
+- Symptôme : le WF s'arrêtait au nœud « Supabase - Assignation icebreaker » pour le compte test `1tGd` (mode template, template prêt).
+- Cause racine : ce nœud cherche l'agent IA assigné au rôle icebreaker ; en mode template il n'y a **pas d'agent assigné** → 0 ligne → n8n stoppe (le choix template/IA au Switch arrive trop tard, après les étapes propres au mode IA). Karine, elle, passait uniquement parce qu'elle a *en plus* un agent assigné.
+- Fix (guidé, live, sans réorganiser) : (1) « Assignation icebreaker » + « Prompt icebreaker » → **Always Output Data** ; (2) « Prompt icebreaker » plantait ensuite en `22P02 invalid uuid "undefined"` (agent_id vide) → **On Error = Continue (regular output)** ; (3) dans le `If`, la condition `{{ $json.is_enabled }}` (issue de l'assignation, vide en template) remplacée par `{{ $('Supabase - Config client').item.json.icebreaker_enabled }}`. Résultat : le flux va jusqu'au Switch et utilise le template.
+- Vérifié : `If` en ET = `allowed_roles` contient icebreaker + `icebreaker_enabled` + `ai_enabled`. Point mineur : `icebreaker_enabled` apparaît 2 fois dans le `If` (doublon inoffensif, à nettoyer un jour).
+
+### Toggle on/off de la carte « Prise de contact » (dashboard)
+- Constat : on pouvait désactiver la prise de contact seulement en re-cliquant sur l'option active (radio caché en interrupteur), pas évident.
+- Ajout d'un vrai **interrupteur on/off** en haut de la carte (`AgentsClient.tsx`) : OFF → `handleIbDisable()` (`icebreaker_enabled=false`, les 2 modes s'éteignent, options grisées + libellé) ; ON → réactive le dernier mode. `tsc` OK, **non commité**.
+- Confirmé côté n8n que la désactivation est respectée de bout en bout : WF « Invitation acceptée » (`If` exige `icebreaker_enabled=true` avant le Switch → aucune génération) ET WF « Schedule envoie » (`If2` exige `ai_enabled=true` ET `icebreaker_enabled=true` → aucun envoi).
+- Testé bout en bout : toggle OFF → `lk_clients_config.icebreaker_enabled=false` en base pour `1tGd` (l'éditeur Supabase ne se rafraîchissait pas, d'où la fausse impression que ça ne changeait pas). RLS OK (`user_id = auth.uid()`).
+
+### Éclaircissements
+- Nathan Vendrell (non-DJ) reçu en prospect : PAS un bug d'icebreaker. Il a été **auto-invité** par la campagne « DJ » (mode invitation automatique) puis a accepté → l'icebreaker se déclenche à l'acceptation, quelle que soit la profession. Leçon : rester en validation manuelle pour éviter les invitations hors cible.
+- Karine `ai_enabled=true` en mode template : normal, pas faussé. `icebreaker_mode=template` (1er message) et `ai_enabled` (IA globale) sont indépendants. Elle n'a pas le rôle `conversation` (allowed_roles={icebreaker,intent}, aucun agent conversation) → aucune réponse IA ne partira. Décision produit : le bouton « Désactiver l'IA » reste un interrupteur maître qui coupe TOUT (template inclus).
+
+## 2026-07-01 — Prospection : fix duplicata + investigation ciblage secteur/poste + bulle d'info
+
+### Fix duplicata de campagne (crash `duplicate key`)
+- Symptôme : relancer un duplicata de campagne renvoyait `duplicate key value violates unique constraint "lk_searches_account_id_query_hash_key"`.
+- Cause : `createCampaign` faisait un `INSERT`, or un duplicata a le même `query_hash` (mêmes critères).
+- Fix (`actions.ts`) : `INSERT` → `upsert` sur `(account_id, query_hash)` → relancer les mêmes critères **reprend la même ligne et son curseur** (profils suivants) au lieu de crasher ; on omet `total_scraped`/`total_sent`/`last_cursor` pour les préserver, on réactive `status='active'`+`exhausted=false`. `query_hash` inclut désormais le secteur. `tsc` OK, **non commité**.
+
+### Bug #3 WF Scrapping (webhook sans nœud Respond → faux 500)
+- Tenté : passer le Webhook en `Respond = Immediately` → **a cassé le scénario** (les nœuds « Respond to Webhook » existants lèvent une erreur dans ce mode). Revert immédiat au réglage d'origine (rétabli, OK).
+- Bon fix = Option B : ajouter un nœud Respond aux 2 branches qui en manquent, sans toucher aux autres. Point ouvert : le WF `Scrapping` **n'est pas dans le repo** → à exporter dans `.n8n-raw/` + `sanitize.mjs` avant de câbler (impact réel faible car le dashboard est en fire-and-forget).
+
+### Investigation ciblage prospection (tests Unipile en direct)
+- DJ à Vannes = 6 profils n'est **pas un bug** ni un effet de mes changements : vivier réel = **49** sans secteur, écrasé à **6** par le filtre « Événementiel » (l'`industry` LinkedIn est auto-déclaré, mal renseigné chez les indépendants).
+- Plusieurs **titres de poste en OU** élargissent le vivier ; un **mot de contexte seul** (`mariage`, `événementiel`) = bruit (attrape communicants, marketeurs, et jusqu'à un nom de famille « Marine Mariage »). Le contexte va **collé au métier** (`dj mariage`).
+- « Agroalimentaire » **n'est pas UN secteur** LinkedIn (le mot exact ne résout rien), il est éclaté en ~8 industries (fabrication, gros, détail, boulangerie, boissons, agriculture). Le tool n'envoie **qu'un seul** secteur (`limit:1`).
+- Throttling LinkedIn constaté sur ~12 recherches en rafale (renvoie 0 puis revient). Mémoire créée : `ciblage-metier-vs-secteur.md`.
+
+### Décision produit + garde-fou UI secteur
+- Multi-sélection des secteurs implémentée puis **retirée** à la demande : on **reste en secteur unique**.
+- Ajout d'un garde-fou UI (`IndustryPicker` + `ProspectsClient`) : **bulle d'info ⓘ** (tooltip stylé `group-hover`) sur le label + **micro-warning permanent** sous la case (« Réduit fortement les résultats. À laisser vide pour un métier précis. ») + placeholder allégé (exemples seuls). `tsc` OK, **non commité**.
+- Vérifié : défaut `lk_prospects.processing_status = 'idle'` **déjà en place**. Point ouvert : Jacques Roulleau encore gelé (`processing` + `ai_enabled=false`), laissé de côté volontairement.
+
+## 2026-07-01 — Audit complet du projet (sécurité + archi/dette + produit/UI)
+
+Tour d'horizon en lecture seule, 3 agents en parallèle (sécurité/données, architecture/dette vs `docs/architecture-cible.md`, cohérence produit/UI). Rien modifié dans le code. Rapport priorisé consigné ci-dessous, à traiter plus tard.
+
+### CRITIQUE
+- 4 vues `SECURITY DEFINER` (`lk_last_messages`, `v_daily_client_report`, `v_weekly_client_report`, `v_account_alert_base`) ouvertes à `anon` → fuite multi-tenant avec l'anon key publique. Migration `security_invoker=on` prête, PAS appliquée (déjà noté 01/07, rappelé ici).
+- Token GitHub `ghp_` en clair dans `.git/config` (remote url) = accès push + prod. À révoquer/roter.
+- Rôle par défaut admin cassé : `admin/page.tsx:40` met `intent` au lieu de `relance` (reliquat du renommage) → l'admin affiche/gère un jeu de rôles différent du réel pour un client sans `allowed_roles`. Fix 1 ligne.
+- Faux positif écarté : les RPC `admin_set_*` semblent une escalade de privilège mais ont un garde interne `auth.email() != 'geoffrey@kaizenia.fr'` (déjà vérifié) → non exploitables.
+
+### IMPORTANT (dette / robustesse)
+- Défense en profondeur manquante : `updateAgent`/`archiveAgent`/`deleteAgent`/`updateRelance` (`agents/actions.ts`) + ~7 actions campagnes (`prospects/actions.ts`) filtrent par `id` seul, sans `.eq("account_id")`. IDOR si une RLS est défaillante. Pattern correct déjà présent ailleurs (`renameCampaign:195`, `removeAssignment:366`).
+- Aucune validation Zod `.strict()` (règle projet violée) : actions parsent `FormData` avec casts `as string`, sans borne ni whitelist. Seul `settings/actions.ts` valide bien.
+- Endpoints IA (`testAgentReply`, `testFirstMessage`) sans rate-limit → coût API Anthropic potentiellement illimité.
+- Compilateur de config 100% côté client : `buildPromptContent(form)` tourne dans le navigateur, `createAgent`/`updateAgent` stockent `prompt_content` tel quel sans recompiler ni valider → inverse de la doctrine "le code décide". Écart n°1 vs archi cible.
+- Aucun policy engine ni linting déterministe en code : règles vitales (lien/prix au 1er message, opt-out, plafonds à l'envoi) rédigées en langage naturel dans les prompts, soumises à l'obéissance du LLM. Le "code qui décide" vit en n8n, hors repo.
+- Schéma DB non versionné dans le repo (0 `.sql`, 0 `migrations/`) → RLS/triggers (`handle_new_user`) invisibles, impossible à reviewer/reconstruire. Croise directement les deux points ci-dessus (on ne peut pas vérifier les RLS depuis le repo).
+- Échecs silencieux UI : page Agents (`AgentsClient.tsx` `handleArchive`/`handleDelete`/`handleRoleChange`/`handleToggleEnabled` ne lisent jamais `result.error`) et toggle IA conversation (`ConversationsClient.tsx:125`, + "Aucun message" affiché sur erreur réseau). Pages centrales, aucun retour à l'utilisateur en cas d'échec.
+- Angles morts produit confirmés dans le code : badge "LinkedIn connecté" toujours basé sur `is_active` (`layout.tsx:23`) ; signup ne crée pas `lk_clients_config` côté repo (trigger DB `handle_new_user` existe mais invisible ici).
+
+### MINEUR / COSMÉTIQUE
+- Statuts non accentués incohérents : Stats (`StatsClient.tsx:30`) et `INTENT_LABELS` (`PipelineClient.tsx:37`) "Invite/Interesse" vs "Invité/Intéressé" ailleurs → dictionnaire de labels partagé.
+- Placeholders vides : `PipelineClient` utilise `--` (double tiret), ailleurs `—` (tiret long) → les deux violent la convention, uniformiser sur du texte.
+- Accents manquants dispersés (messages LinkedIn, tooltips IA, en-têtes Stats, messages d'erreur serveur).
+- "Santé du compte" à moitié remplie (`StatsClient.tsx:147`, grille 4 col / 1 rempli) ; props `totalInterested`/`totalSent` mortes ; `window.confirm` natif pour supprimer un agent (incohérent).
+- A11y : tri colonnes `<th onClick>` non navigable clavier (`PipelineClient.tsx:215`).
+- Piège admin `maybeSingle()` sans filtre user_id (`prospects/page.tsx:48`) : bug d'affichage admin, pas une fuite.
+- Timezone codée en dur `Europe/Paris` (`prospects/page.tsx:9`) alors que chaque client a sa colonne `timezone` → comptage "invités aujourd'hui" décalé hors Paris.
+- Doc : CLAUDE.md dit "socle 25" mais le code enforce 20 partout (`delayPresets.ts:19`) → corriger la doc.
+
+### Sain (vérifié, ne pas y toucher)
+- 0 secret en dur dans `src/`, `.env*` gitignorés, front sur anon key uniquement. Cookies via `@supabase/ssr` (HttpOnly, pas de `localStorage`), middleware protège `/dashboard/*`. 0 `dangerouslySetInnerHTML`/`eval`, TS robuste (0 `any`/`@ts-ignore`). `delayPresets.ts` = source unique. Tables orphelines bien retirées du code. Pagination bornée. États vides gérés sur la plupart des pages.
+
+### Ordre de traitement recommandé (à faire plus tard)
+1. Sécurité d'abord : appliquer migration `security_invoker` (4 vues) ; révoquer PAT GitHub ; fix `intent→relance`. Puis `.eq("account_id")` en défense en profondeur.
+2. Robustesse produit : remonter les erreurs server actions à l'UI (pages Agents + Conversations).
+3. Versionner le schéma DB (`supabase db pull` → `migrations/`) → débloque la vérifiabilité RLS.
+4. Fond : rapatrier `buildPromptContent` côté serveur + amorcer policy engine/linting (virage archi cible, à cadrer avec Geoffrey).
+
 ## 2026-07-01 — Déblocage envois icebreaker Karine (404 Unipile) + compteur message_count fiabilisé
 
 ### Audit Geoffrey — Waves 1 & 2 (finitions UI /dashboard/agents)
@@ -27,6 +106,28 @@ Pour la vue d'ensemble par phases, voir [ROADMAP.md](./ROADMAP.md).
 ### Alignement test agent ↔ prod icebreaker IA réglé (n8n)
 - Le nœud `Claude - Icebreaker` du WF `0yQOYs1Ffiqtj4IX` utilise désormais le `prompt_content` de l'agent assigné au client (plus l'ancien prompt figé). La divergence entre le message du test dashboard et le message réellement envoyé par l'icebreaker IA est corrigée : test = prod.
 - Effet : quand un client crée et teste un agent icebreaker, ce qu'il voit dans le test est bien ce qui part en prod.
+
+### Audit sécurité Supabase (advisors) — diagnostic, correctifs non encore appliqués
+- Passé en revue les alertes `get_advisors` (security). Lu le code réel des fonctions/vues avant de conclure (le linter ne voit pas les gardes internes).
+- Critique confirmé : 4 vues `SECURITY DEFINER` (`lk_last_messages`, `v_daily_client_report`, `v_weekly_client_report`, `v_account_alert_base`) avec `SELECT` accordé à `anon`+`authenticated` → bypass RLS = fuite inter-clients (n'importe qui avec l'anon key publique peut dumper les données de tous les comptes). `lk_last_messages` est utilisée par le front (`conversations/page.tsx`), les 3 rapports par n8n. Correctif retenu : passer les 4 en `security_invoker = on` (zéro régression, RLS de l'appelant s'applique).
+- Faux positifs vérifiés : `admin_set_allowed_roles` / `admin_set_can_edit_prompt` ont un garde interne `auth.email() != 'geoffrey@kaizenia.fr'` → non exploitables malgré l'alerte. `handle_new_user` / `bump_prospect_message_count` / `check_column_permissions` = fonctions trigger inutilement exposées en RPC (inoffensives). `search_path` non figé sur `update_updated_at_column` / `get_complete_schema` / `check_column_permissions`. `lk_blocklist` : RLS sans policy (deny-all, sécurisé par défaut).
+- Point ouvert : migration non appliquée (attente feu vert Nicolas) — (1) `security_invoker` sur les 4 vues, (2) révoquer EXECUTE anon superflus, (3) figer les `search_path`. À activer aussi manuellement dans Auth : leaked password protection (HaveIBeenPwned).
+
+### n8n — insert `lk_search_results` qui saute le batch entier sur doublon
+- Diagnostic : le nœud Supabase natif (autoMapInputData) POST les N lignes en un seul appel PostgREST atomique → un seul doublon sur la contrainte `lk_search_results_account_provider_uniq` fait échouer TOUT le lot (0 nouveau contact). Le nœud natif n'expose ni `on conflict` ni le header `Prefer`.
+- Solution fournie : remplacer par un HTTP Request → PostgREST avec `Prefer: resolution=ignore-duplicates`, credential Supabase réutilisée (pas de clé en dur). JSON du nœud prêt à coller donné (envoi ligne par ligne). Option upsert = `resolution=merge-duplicates`.
+- Point ouvert : remplacement du nœud à faire côté n8n (build guidé UI), pas encore appliqué.
+- Fourni aussi la formule cron `0 8-20 * * 1-6` (lun-sam, 8h-20h, toutes les heures) pour un déclenchement de WF.
+
+### Feature UI — lien LinkedIn sur chaque ligne prospect (/dashboard/prospects)
+- Nouveau composant présentationnel `LinkedInLink.tsx` : reconstruit l'URL profil depuis le `provider_id` Unipile (`https://www.linkedin.com/in/{provider_id}`, `encodeURIComponent`), ouvre dans un nouvel onglet, masqué si pas de `provider_id`.
+- Intégré aux 4 emplacements : file d'attente, à valider, dernières invitations (aperçu), et page « toutes les invitations » (`invited/page.tsx`, `provider_id` ajouté au SELECT qui ne le remontait pas).
+- `tsc --noEmit` OK. Non commité (attente feu vert avant push = déploiement prod auto).
+
+### /review pré-merge
+- Diff feature LinkedIn : sain, scope clean. Auto-fix `encodeURIComponent` sur l'URL.
+- CRITIQUE hors-diff : **token GitHub `ghp_...` en clair dans l'URL du remote origin** (`.git/config`). Credential vivante avec accès écriture repo (donc prod via auto-deploy Vercel).
+- Point ouvert : révoquer/roter le PAT et retirer le token de l'URL remote (`git remote set-url` + credential helper) ; gitignorer `.claude/.day-cache.json` et `.claude/statusline.py` non suivis.
 
 ## 2026-06-30 — Audit de l'audit Cyrano (maj 29-30/06) + 14 corrections UI
 
