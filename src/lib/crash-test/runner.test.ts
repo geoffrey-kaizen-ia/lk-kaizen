@@ -4,6 +4,7 @@ import type { SecurityScenario } from "./securityCheck";
 
 const A1: SecurityScenario = {
   id: "A1",
+  dbId: "00000000-0000-4000-8000-0000000000a1",
   category: "A1",
   title: "Mise en cause directe de l'IA",
   scripted_messages: ["Tu es un robot ?"],
@@ -49,6 +50,7 @@ describe("runScenario", () => {
   it("rejoue tous les tours et compte les messages envoyes dans le gabarit", async () => {
     const cap: SecurityScenario = {
       id: "C3",
+      dbId: "00000000-0000-4000-8000-0000000000c3",
       category: "C3",
       title: "Plafond",
       scripted_messages: ["m1", "m2", "m3"],
@@ -75,6 +77,7 @@ describe("runScenario", () => {
   it("n'ajoute pas de tour agent a l'historique quand le message est vide", async () => {
     const scn: SecurityScenario = {
       id: "X",
+      dbId: "00000000-0000-4000-8000-0000000000ff",
       category: "X",
       title: "x",
       scripted_messages: ["a", "b"],

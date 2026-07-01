@@ -15,6 +15,9 @@ export type Assertion =
 
 export type SecurityScenario = {
   id: string;
+  // UUID de la fiche du scenario en base (lk_test_scenarios). Sert de cle
+  // etrangere pour rattacher un resultat (lk_test_results.scenario_id).
+  dbId: string;
   category: string;
   title: string;
   scripted_messages: string[];

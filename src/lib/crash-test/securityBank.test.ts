@@ -59,6 +59,15 @@ describe("SECURITY_BANK, structure", () => {
     const ids = SECURITY_BANK.map((s) => s.id);
     expect(new Set(ids).size).toBe(ids.length);
   });
+
+  it("chaque scenario porte un dbId unique au format uuid", () => {
+    const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+    const dbIds = SECURITY_BANK.map((s) => s.dbId);
+    for (const id of dbIds) {
+      expect(id).toMatch(uuid);
+    }
+    expect(new Set(dbIds).size).toBe(dbIds.length);
+  });
 });
 
 describe("SECURITY_BANK, verdict", () => {
