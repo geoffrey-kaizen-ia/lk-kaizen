@@ -1,0 +1,184 @@
+{
+  "name": "Kaizen - Crash Test Agent",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "crash-test",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "11111111-1111-4111-8111-111111111111",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "webhookId": "crash-test"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "tableId": "lk_agents",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $json.body.agent_id }}"
+            }
+          ]
+        }
+      },
+      "id": "22222222-2222-4222-8222-222222222222",
+      "name": "Get agent",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [220, 0]
+    },
+    {
+      "parameters": {
+        "tableId": "lk_test_runs",
+        "fieldsUi": {
+          "fieldValues": [
+            { "fieldId": "agent_id", "fieldValue": "={{ $('Webhook').item.json.body.agent_id }}" },
+            { "fieldId": "account_id", "fieldValue": "={{ $('Get agent').item.json.account_id }}" },
+            { "fieldId": "status", "fieldValue": "running" },
+            { "fieldId": "trigger", "fieldValue": "={{ $('Webhook').item.json.body.trigger }}" }
+          ]
+        }
+      },
+      "id": "33333333-3333-4333-8333-333333333333",
+      "name": "Create run",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [440, 0]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "lk_agents",
+        "filters": {
+          "conditions": [
+            { "keyName": "id", "condition": "eq", "keyValue": "={{ $('Webhook').item.json.body.agent_id }}" }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            { "fieldId": "test_status", "fieldValue": "testing" }
+          ]
+        }
+      },
+      "id": "44444444-4444-4444-8444-444444444444",
+      "name": "Set testing",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [660, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://REMPLACER-URL-PREVIEW/api/crash-test/run-all",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-crash-test-secret", "value": "REMPLACER-SECRET" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"prompt_content\": $('Get agent').item.json.prompt_content } }}",
+        "options": { "timeout": 300000 }
+      },
+      "id": "55555555-5555-4555-8555-555555555555",
+      "name": "Run all scenarios",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [880, 0]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "lk_test_runs",
+        "filters": {
+          "conditions": [
+            { "keyName": "id", "condition": "eq", "keyValue": "={{ $('Create run').item.json.id }}" }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            { "fieldId": "status", "fieldValue": "={{ $json.verdict.passed ? 'passed' : 'failed' }}" },
+            { "fieldId": "verdict", "fieldValue": "={{ JSON.stringify($json.verdict) }}" },
+            { "fieldId": "finished_at", "fieldValue": "={{ $now.toISO() }}" }
+          ]
+        }
+      },
+      "id": "66666666-6666-4666-8666-666666666666",
+      "name": "Finalize run",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [1100, 0]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "lk_agents",
+        "filters": {
+          "conditions": [
+            { "keyName": "id", "condition": "eq", "keyValue": "={{ $('Webhook').item.json.body.agent_id }}" }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            { "fieldId": "test_status", "fieldValue": "={{ $('Run all scenarios').item.json.verdict.passed ? 'validated' : 'failed' }}" },
+            { "fieldId": "last_test_run_id", "fieldValue": "={{ $('Create run').item.json.id }}" }
+          ]
+        }
+      },
+      "id": "77777777-7777-4777-8777-777777777777",
+      "name": "Finalize agent",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [1320, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "const runId = $('Create run').first().json.id;\nconst runs = $('Run all scenarios').first().json.runs;\nreturn runs.map((r) => ({\n  json: {\n    run_id: runId,\n    scenario_id: r.scenario_db_id,\n    outcome: r.outcome,\n    score: r.score,\n    transcript: r.transcript,\n  },\n}));"
+      },
+      "id": "88888888-8888-4888-8888-888888888888",
+      "name": "Prepare results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1540, 0]
+    },
+    {
+      "parameters": {
+        "tableId": "lk_test_results",
+        "fieldsUi": {
+          "fieldValues": [
+            { "fieldId": "run_id", "fieldValue": "={{ $json.run_id }}" },
+            { "fieldId": "scenario_id", "fieldValue": "={{ $json.scenario_id }}" },
+            { "fieldId": "outcome", "fieldValue": "={{ $json.outcome }}" },
+            { "fieldId": "score", "fieldValue": "={{ $json.score }}" },
+            { "fieldId": "transcript", "fieldValue": "={{ JSON.stringify($json.transcript) }}" }
+          ]
+        }
+      },
+      "id": "99999999-9999-4999-8999-999999999999",
+      "name": "Insert results",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [1760, 0]
+    }
+  ],
+  "connections": {
+    "Webhook": { "main": [[{ "node": "Get agent", "type": "main", "index": 0 }]] },
+    "Get agent": { "main": [[{ "node": "Create run", "type": "main", "index": 0 }]] },
+    "Create run": { "main": [[{ "node": "Set testing", "type": "main", "index": 0 }]] },
+    "Set testing": { "main": [[{ "node": "Run all scenarios", "type": "main", "index": 0 }]] },
+    "Run all scenarios": { "main": [[{ "node": "Finalize run", "type": "main", "index": 0 }]] },
+    "Finalize run": { "main": [[{ "node": "Finalize agent", "type": "main", "index": 0 }]] },
+    "Finalize agent": { "main": [[{ "node": "Prepare results", "type": "main", "index": 0 }]] },
+    "Prepare results": { "main": [[{ "node": "Insert results", "type": "main", "index": 0 }]] }
+  },
+  "settings": {}
+}
