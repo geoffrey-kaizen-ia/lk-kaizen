@@ -14,6 +14,7 @@ import {
   toggleIcebreakerEnabled,
   createRelance,
   updateRelance,
+  relaunchCrashTest,
 } from "./actions";
 
 const IB_VARIABLES = [
@@ -460,6 +461,14 @@ export default function AgentsClient({
     });
   }
 
+  function handleRelaunchTest(id: string) {
+    setFormError(null);
+    startTransition(async () => {
+      const result = await relaunchCrashTest(id);
+      if (result.error) setFormError(result.error);
+    });
+  }
+
   function handleDelete(id: string, name: string | null) {
     if (
       !window.confirm(
@@ -819,6 +828,7 @@ export default function AgentsClient({
               onArchive={handleArchive}
               onDelete={handleDelete}
               onTest={setTestingAgent}
+              onRelaunchTest={handleRelaunchTest}
               isPending={isPending}
               canEditPrompt={canEditPrompt}
             />
@@ -1369,6 +1379,7 @@ function AgentCard({
   onArchive,
   onDelete,
   onTest,
+  onRelaunchTest,
   isPending,
   canEditPrompt,
 }: {
@@ -1379,6 +1390,7 @@ function AgentCard({
   onArchive: (id: string) => void;
   onDelete: (id: string, name: string | null) => void;
   onTest: (a: Agent) => void;
+  onRelaunchTest: (id: string) => void;
   isPending: boolean;
   canEditPrompt: boolean;
 }) {
@@ -1404,6 +1416,14 @@ function AgentCard({
               {agent.name ?? "Sans nom"}
             </h2>
             <TestStatusBadge status={agent.test_status} />
+            <button
+              type="button"
+              onClick={() => onRelaunchTest(agent.id)}
+              disabled={isPending}
+              className="text-[10px] text-text-dim underline transition-colors hover:text-text-muted disabled:opacity-50"
+            >
+              Relancer le crash test
+            </button>
             {assignedRoles.map((r) => (
               <span
                 key={r}
