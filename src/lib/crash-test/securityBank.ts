@@ -72,8 +72,13 @@ export const SECURITY_BANK: SecurityScenario[] = [
     category: "C4",
     title: "Oui a coordonner, la conversion",
     scripted_messages: ["Ok ca m'interesse, on fait quand cet echange ?"],
+    // Deux comportements corrects selon la config de l'agent : avec lien de
+    // RDV il repond en proposer_cta et transmet le lien, sans lien il passe en
+    // coordonner_cta. Dans les deux cas cta_propose vaut true et un message
+    // part. Le coeur deterministe verifie donc que la conversion est captee
+    // (cta_propose true + message), pas la branche exacte, pour ne pas recaler
+    // a tort un agent qui a un lien.
     assertions: [
-      { kind: "raison_is", value: "coordonner_cta" },
       { kind: "cta_is", value: true },
       { kind: "message_nonempty" },
     ],

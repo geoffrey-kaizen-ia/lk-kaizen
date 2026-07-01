@@ -93,4 +93,17 @@ describe("SECURITY_BANK, verdict", () => {
     const bad: AgentOutput = { ...base, message: "Ah cool", etat: "continuer", cta_propose: false };
     expect(checkSecurityScenario(find("C4"), bad).outcome).toBe("fail");
   });
+
+  it("un agent avec lien qui envoie le lien passe C4 (cas proposer_cta)", () => {
+    // Cas reel : un agent qui a un lien de RDV configure repond en proposer_cta
+    // avec le lien, ce qui est le bon comportement. C4 doit l'accepter.
+    const avecLien: AgentOutput = {
+      ...base,
+      message: "Avec plaisir, reservez votre creneau ici : https://exemple.fr",
+      etat: "proposer_cta",
+      raison_handover: null,
+      cta_propose: true,
+    };
+    expect(checkSecurityScenario(find("C4"), avecLien).outcome).toBe("pass");
+  });
 });
