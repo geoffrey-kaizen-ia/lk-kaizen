@@ -3,6 +3,31 @@
 Journal chronologique des sessions de travail. Le plus recent en haut.
 Pour la vue d'ensemble par phases, voir [ROADMAP.md](./ROADMAP.md).
 
+## 2026-07-01 — Déblocage envois icebreaker Karine (404 Unipile) + compteur message_count fiabilisé
+
+### Audit Geoffrey — Waves 1 & 2 (finitions UI /dashboard/agents)
+- Revue de `docs/audit-geoffrey-plan.md` (daté 29/06) : vérification agent point par point de la Wave 1 contre le code réel → l'essentiel était déjà couvert par les commits `278015b`/`fb3167e`/`482b4d4`. Seuls 2 points restaient.
+- Wave 1 close (commit `53151a7`) : (L1-4) dernier « Icebreaker » visible → « Prise de contact » ; (L1-13) `<select>` d'assignation de rôle gelé quand le rôle est en pause ET déjà assigné (`!isEnabled && hasAssignment`) — variante sûre choisie car la reco littérale du doc aurait bloqué l'assignation initiale (deadlock select/toggle).
+- Wave 2 close (commit `78e469c`) : (L1-9) badge de rôle explicite par agent dans « Mes agents » (« Actif · rôle » vert vs « rôle · en pause » gris ; Prise de contact active seulement en mode IA) ; (Pilot-4) avertissement de divergence de ton (tutoiement/style décontracté) entre agent Prise de contact et agent Conversation, non bloquant, dans Rôles actifs ; (Pilot-2) déjà couvert par l'avertissement « sans amont » existant, rien ajouté.
+- `tsc --noEmit` OK aux deux étapes. Commits poussés sur `main` (déploiement Vercel prod déclenché).
+- Point ouvert : vérification visuelle browser des badges/avertissements non faite (commité sur tsc). Reste au doc côté UI non bloqué : Wave 3 (mode test enrichi), Wave 5 (actions CRM), Wave 6 (santé compte v2). Waves 4/7 bloquées par le Lot 4 n8n (en pause), Wave 8 = décisions Geoffrey, Wave 9 post-V1.
+
+### Envois icebreaker bloqués (WF envoi `HdUkHiDzT9gpTvgV`)
+- Constat : aucun icebreaker parti ce matin pour Karine (`YIKlrU-VRTG4_VyElJMheg`). 6 prospects gelés en `processing_status='processing'` avec `pending_reply` rempli et `scheduled_send_at` échu (Sabrina, Stéphane, Estelle, Didier, Isabelle, Jacques).
+- Cause racine (erreur n8n fournie) : le nœud `Unipile - Chats du compte` renvoyait un **404 "Attendee not found"** sur l'item 0 → arrêt du WF sans gestion d'erreur → verrous jamais relâchés + batch tué (boucle). Le nœud live avait **divergé de l'export** (`docs/n8n/icebreaker-message.json` pointe bien sur `/chats?account_id=…&account_type=LINKEDIN` qui ne 404 pas ; le live était repassé sur l'endpoint `/chat_attendees/{id}/chats`, abandonné le 30/06).
+- Fix n8n (Nicolas, guidé UI) : retour à l'endpoint `/chats?account_id` (+ filet On Error à confirmer). Résultat vérifié en base : **Didier (09:20) et Isabelle (09:21) envoyés**, statut `in_conversation`, `chat_id` créé, verrou relâché, file vidée. Template Karine + substitution du prénom OK. Présents CRM + Conversations.
+- Point ouvert : vérifier/débloquer les 4 autres (Sabrina, Stéphane, Estelle, Jacques) ; re-export sanitizé du WF d'envoi (live divergé) ; confirmer le câblage On Error sur le nœud Unipile.
+
+### Compteur message_count fiabilisé (trigger DB)
+- Constat : `lk_prospects.message_count` restait à 0 après envoi (n8n ne l'incrémentait pas — cause de l'oubli qui fausse le plafond `maxMessages` et les relances).
+- Décision : compter côté base, pas dans chaque WF (évite les oublis). Trigger `trg_bump_message_count` sur `lk_messages` (`after insert`, filtré `direction='outbound'`) → incrémente `message_count` sur le bon prospect via `prospect_id`. Migration `bump_prospect_message_count_outbound` appliquée (fonction `security definer` + `search_path=''`).
+- Portée : **outbound uniquement** (messages de l'agent IA), pour alimenter le plafond `maxMessages`. Backfill de toute la table passé ; vérifié Didier/Isabelle = 1.
+- Effet : brique de comptage désormais fiable pour le compteur dur `maxMessages` du LOT 4, plus rien à câbler côté n8n.
+
+### Alignement test agent ↔ prod icebreaker IA réglé (n8n)
+- Le nœud `Claude - Icebreaker` du WF `0yQOYs1Ffiqtj4IX` utilise désormais le `prompt_content` de l'agent assigné au client (plus l'ancien prompt figé). La divergence entre le message du test dashboard et le message réellement envoyé par l'icebreaker IA est corrigée : test = prod.
+- Effet : quand un client crée et teste un agent icebreaker, ce qu'il voit dans le test est bien ce qui part en prod.
+
 ## 2026-06-30 — Audit de l'audit Cyrano (maj 29-30/06) + 14 corrections UI
 
 ### Audit de l'audit : croisement doc Cyrano vs code reel
