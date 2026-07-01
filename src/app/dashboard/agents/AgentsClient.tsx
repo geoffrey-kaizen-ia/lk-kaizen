@@ -742,7 +742,7 @@ export default function AgentsClient({
                       className="w-full rounded-md border border-border-strong bg-panel-raised px-2.5 py-2 text-sm text-foreground focus:border-accent focus:outline-none disabled:opacity-50"
                       value={assignmentMap[key] ?? ""}
                       onChange={(e) => handleRoleChange(key, e.target.value)}
-                      disabled={isPending}
+                      disabled={isPending || (!isEnabled && hasAssignment)}
                     >
                       <option value="">-- Aucun agent --</option>
                       {agentsCompatibleWithRole(activeAgents, key).map((a) => (
@@ -756,7 +756,7 @@ export default function AgentsClient({
                       hasAssignment &&
                       !(ibEnabled && (ibMode === "ai" ? !!assignmentMap["icebreaker"] : ibMode === "template")) && (
                         <p className="text-xs text-warning">
-                          Aucune prise de contact n&apos;est activée en amont. La conversation n&apos;aura pas de premier message à enchaîner tant que tu n&apos;auras pas activé l&apos;Icebreaker.
+                          Aucune prise de contact n&apos;est activée en amont. La conversation n&apos;aura pas de premier message à enchaîner tant que tu n&apos;auras pas activé la Prise de contact.
                         </p>
                       )}
                   </div>
